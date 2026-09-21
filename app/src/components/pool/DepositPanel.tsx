@@ -12,6 +12,7 @@ import { AmountField, StatusBanner, onFormSubmit } from "@/components/pool/FormB
 import { useAmmProgram } from "@/hooks/useAmmProgram";
 import { derivePoolPdas, toBn } from "@/lib/amm/pdas";
 import { depositSchema } from "@/schemas/pool";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 export type DepositPanelProps = {
   mintX: string;
@@ -25,6 +26,7 @@ export type DepositPanelProps = {
  * @returns Deposit liquidity panel.
  */
 export function DepositPanel({ mintX, mintY }: DepositPanelProps) {
+  const { t } = useI18n();
   const program = useAmmProgram();
   const { publicKey } = useWallet();
   const [seed, setSeed] = useState("1");
@@ -38,12 +40,12 @@ export function DepositPanel({ mintX, mintY }: DepositPanelProps) {
     setError(null);
     setStatus(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first");
+      setError(t.connectWalletFirst);
       return;
     }
     const parsed = depositSchema.safeParse({ seed, amountX, amountY, minLp });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input");
+      setError(parsed.error.issues[0]?.message ?? t.invalidInput);
       return;
     }
 
@@ -78,21 +80,21 @@ export function DepositPanel({ mintX, mintY }: DepositPanelProps) {
           systemProgram: SystemProgram.programId,
         })
         .rpc();
-      setStatus(`Deposited · tx ${sig.slice(0, 8)}…`);
+      setStatus(t.deposited(sig.slice(0, 8)));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Deposit failed");
+      setError(err instanceof Error ? err.message : t.depositFailed);
     }
   }
 
   return (
     <section className="panel" aria-labelledby="deposit-heading">
-      <h2 id="deposit-heading">Deposit</h2>
+      <h2 id="deposit-heading">{t.depositTitle}</h2>
       <form onSubmit={(event) => onFormSubmit(event, submit)}>
-        <AmountField id="dep-seed" label="Seed" value={seed} onChange={setSeed} />
-        <AmountField id="dep-x" label="Amount X" value={amountX} onChange={setAmountX} />
-        <AmountField id="dep-y" label="Amount Y" value={amountY} onChange={setAmountY} />
-        <AmountField id="dep-min-lp" label="Min LP" value={minLp} onChange={setMinLp} />
-        <button type="submit">Deposit</button>
+        <AmountField id="dep-seed" label={t.seed} value={seed} onChange={setSeed} />
+        <AmountField id="dep-x" label={t.amountX} value={amountX} onChange={setAmountX} />
+        <AmountField id="dep-y" label={t.amountY} value={amountY} onChange={setAmountY} />
+        <AmountField id="dep-min-lp" label={t.minLp} value={minLp} onChange={setMinLp} />
+        <button type="submit">{t.actionDeposit}</button>
       </form>
       <StatusBanner message={status} />
       <StatusBanner message={error} tone="error" />

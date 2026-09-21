@@ -1,19 +1,41 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 
-:root {
+:root,
+[data-theme="light"] {
   --bg0: #e8f0ea;
   --bg1: #d5e4da;
+  --glow-a: #f4fff7;
+  --glow-b: #ffe8d6;
   --ink: #14231a;
   --muted: #4a5c52;
   --accent: #0f6b4c;
   --accent-2: #c45c26;
   --panel: rgba(255, 255, 255, 0.72);
   --line: rgba(20, 35, 26, 0.12);
+  --input-bg: #fff;
   --danger: #9b1c1c;
   --ok: #0f6b4c;
+  --overlay: rgba(20, 35, 26, 0.45);
   --radius: 14px;
   --font-display: "Fraunces", Georgia, serif;
   --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+[data-theme="dark"] {
+  --bg0: #0f1612;
+  --bg1: #1a2620;
+  --glow-a: #163528;
+  --glow-b: #2a1f14;
+  --ink: #e6f0ea;
+  --muted: #9bb0a4;
+  --accent: #3dba86;
+  --accent-2: #e08a4f;
+  --panel: rgba(22, 32, 27, 0.82);
+  --line: rgba(230, 240, 234, 0.12);
+  --input-bg: #121a16;
+  --danger: #f07178;
+  --ok: #3dba86;
+  --overlay: rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -27,9 +49,10 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   background:
-    radial-gradient(1200px 600px at 10% -10%, #f4fff7 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #ffe8d6 0%, transparent 50%),
+    radial-gradient(1200px 600px at 10% -10%, var(--glow-a) 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, var(--glow-b) 0%, transparent 50%),
     linear-gradient(160deg, var(--bg0), var(--bg1));
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 body {
@@ -52,6 +75,14 @@ a {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .brand {
@@ -68,6 +99,33 @@ a {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.icon-btn {
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+}
+
+.icon-btn:hover {
+  border-color: var(--accent);
+}
+
+.locale-btn {
+  width: auto;
+  min-width: 2.4rem;
+  padding: 0 0.65rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
 }
 
 .hero {
@@ -129,7 +187,7 @@ a {
   padding: 0.55rem 0.7rem;
   font: inherit;
   color: var(--ink);
-  background: #fff;
+  background: var(--input-bg);
 }
 
 .direction {
@@ -141,7 +199,8 @@ a {
   gap: 1rem;
 }
 
-button[type="submit"] {
+button[type="submit"],
+.center-page button {
   border: 0;
   border-radius: 999px;
   padding: 0.55rem 1rem;
@@ -152,7 +211,8 @@ button[type="submit"] {
   cursor: pointer;
 }
 
-button[type="submit"]:hover {
+button[type="submit"]:hover,
+.center-page button:hover {
   filter: brightness(1.05);
 }
 
@@ -176,4 +236,70 @@ button[type="submit"]:hover {
   place-content: center;
   text-align: center;
   gap: 0.75rem;
+}
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--overlay);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.help-dialog {
+  width: min(640px, 100%);
+  max-height: min(85vh, 720px);
+  overflow: auto;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.help-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: inherit;
+}
+
+.help-dialog-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.help-dialog-body {
+  padding: 1rem 1.1rem 1.4rem;
+  display: grid;
+  gap: 1rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.help-section h3 {
+  margin: 0 0 0.45rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.help-section ol,
+.help-section ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.wallet-adapter-button {
+  background-color: var(--accent) !important;
 }

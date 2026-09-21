@@ -13,12 +13,14 @@ import { AmountField, StatusBanner, onFormSubmit } from "@/components/pool/FormB
 import { useAmmProgram } from "@/hooks/useAmmProgram";
 import { derivePoolPdas, toBn } from "@/lib/amm/pdas";
 import { initializeSchema } from "@/schemas/pool";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 /**
  * @description Form to initialize a new constant-product pool on-chain.
  * @returns Initialize pool panel.
  */
 export function InitializePanel() {
+  const { t } = useI18n();
   const program = useAmmProgram();
   const { publicKey } = useWallet();
   const [seed, setSeed] = useState("1");
@@ -32,13 +34,13 @@ export function InitializePanel() {
     setError(null);
     setStatus(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first");
+      setError(t.connectWalletFirst);
       return;
     }
 
     const parsed = initializeSchema.safeParse({ seed, feeBps, mintX, mintY });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input");
+      setError(parsed.error.issues[0]?.message ?? t.invalidInput);
       return;
     }
 
@@ -65,21 +67,33 @@ export function InitializePanel() {
           systemProgram: SystemProgram.programId,
         })
         .rpc();
-      setStatus(`Initialized. Config ${config.toBase58()} · tx ${sig.slice(0, 8)}…`);
+      setStatus(t.initialized(config.toBase58(), sig.slice(0, 8)));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Initialize failed");
+      setError(err instanceof Error ? err.message : t.initializeFailed);
     }
   }
 
   return (
     <section className="panel" aria-labelledby="initialize-heading">
-      <h2 id="initialize-heading">Initialize pool</h2>
+      <h2 id="initialize-heading">{t.initializeTitle}</h2>
       <form onSubmit={(event) => onFormSubmit(event, submit)}>
-        <AmountField id="init-seed" label="Seed" value={seed} onChange={setSeed} />
-        <AmountField id="init-fee" label="Fee (bps)" value={feeBps} onChange={setFeeBps} />
-        <AmountField id="init-mint-x" label="Mint X" value={mintX} onChange={setMintX} placeholder="Pubkey" />
-        <AmountField id="init-mint-y" label="Mint Y" value={mintY} onChange={setMintY} placeholder="Pubkey" />
-        <button type="submit">Initialize</button>
+        <AmountField id="init-seed" label={t.seed} value={seed} onChange={setSeed} />
+        <AmountField id="init-fee" label={t.feeBps} value={feeBps} onChange={setFeeBps} />
+        <AmountField
+          id="init-mint-x"
+          label={t.mintX}
+          value={mintX}
+          onChange={setMintX}
+          placeholder="Pubkey"
+        />
+        <AmountField
+          id="init-mint-y"
+          label={t.mintY}
+          value={mintY}
+          onChange={setMintY}
+          placeholder="Pubkey"
+        />
+        <button type="submit">{t.actionInitialize}</button>
       </form>
       <StatusBanner message={status} />
       <StatusBanner message={error} tone="error" />

@@ -1,5 +1,7 @@
 "use client";
 
+import { useI18n } from "@/lib/i18n/I18nProvider";
+
 /**
  * @description Route-level error UI for the main app segment.
  * @param props.error Thrown error instance.
@@ -13,12 +15,14 @@ export default function ErrorPage({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <main className="center-page">
-      <h1>Something went wrong</h1>
+      <h1>{t.errorTitle}</h1>
       <p>{error.message}</p>
       <button type="button" onClick={reset}>
-        Try again
+        {t.errorRetry}
       </button>
     </main>
   );

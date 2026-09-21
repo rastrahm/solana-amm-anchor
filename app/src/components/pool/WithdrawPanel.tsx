@@ -8,6 +8,7 @@ import { AmountField, StatusBanner, onFormSubmit } from "@/components/pool/FormB
 import { useAmmProgram } from "@/hooks/useAmmProgram";
 import { derivePoolPdas, toBn } from "@/lib/amm/pdas";
 import { withdrawSchema } from "@/schemas/pool";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 export type WithdrawPanelProps = {
   mintX: string;
@@ -21,6 +22,7 @@ export type WithdrawPanelProps = {
  * @returns Withdraw liquidity panel.
  */
 export function WithdrawPanel({ mintX, mintY }: WithdrawPanelProps) {
+  const { t } = useI18n();
   const program = useAmmProgram();
   const { publicKey } = useWallet();
   const [seed, setSeed] = useState("1");
@@ -34,12 +36,12 @@ export function WithdrawPanel({ mintX, mintY }: WithdrawPanelProps) {
     setError(null);
     setStatus(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first");
+      setError(t.connectWalletFirst);
       return;
     }
     const parsed = withdrawSchema.safeParse({ seed, lpAmount, minX, minY });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input");
+      setError(parsed.error.issues[0]?.message ?? t.invalidInput);
       return;
     }
 
@@ -64,21 +66,21 @@ export function WithdrawPanel({ mintX, mintY }: WithdrawPanelProps) {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
-      setStatus(`Withdrawn · tx ${sig.slice(0, 8)}…`);
+      setStatus(t.withdrawn(sig.slice(0, 8)));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Withdraw failed");
+      setError(err instanceof Error ? err.message : t.withdrawFailed);
     }
   }
 
   return (
     <section className="panel" aria-labelledby="withdraw-heading">
-      <h2 id="withdraw-heading">Withdraw</h2>
+      <h2 id="withdraw-heading">{t.withdrawTitle}</h2>
       <form onSubmit={(event) => onFormSubmit(event, submit)}>
-        <AmountField id="wd-seed" label="Seed" value={seed} onChange={setSeed} />
-        <AmountField id="wd-lp" label="LP amount" value={lpAmount} onChange={setLpAmount} />
-        <AmountField id="wd-min-x" label="Min X" value={minX} onChange={setMinX} />
-        <AmountField id="wd-min-y" label="Min Y" value={minY} onChange={setMinY} />
-        <button type="submit">Withdraw</button>
+        <AmountField id="wd-seed" label={t.seed} value={seed} onChange={setSeed} />
+        <AmountField id="wd-lp" label={t.lpAmount} value={lpAmount} onChange={setLpAmount} />
+        <AmountField id="wd-min-x" label={t.minX} value={minX} onChange={setMinX} />
+        <AmountField id="wd-min-y" label={t.minY} value={minY} onChange={setMinY} />
+        <button type="submit">{t.actionWithdraw}</button>
       </form>
       <StatusBanner message={status} />
       <StatusBanner message={error} tone="error" />
