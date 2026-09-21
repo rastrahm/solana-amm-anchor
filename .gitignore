@@ -1,0 +1,83 @@
+# Solana / Anchor / Rust
+.anchor/
+target/
+test-ledger/
+**/*.so
+!.gitkeep
+
+# Program keypairs & secrets — NUNCA commitear
+**/target/deploy/*-keypair.json
+.KEYS/
+keys/
+*-keypair.json
+.id.json
+.wallet/
+*.pem
+
+# Node / TypeScript tests & frontend
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+.npm
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+pnpm-lock.yaml
+# Descomenta si prefieres no versionar el lock de npm/yarn:
+# package-lock.json
+# yarn.lock
+
+# Env & local config
+.env
+.env.*
+!.env.example
+.local
+*.local
+
+# IDL / tipos generados (regenerables con `anchor build`)
+# Mantén comentado si quieres versionar el IDL para consumidores:
+# target/idl/
+# target/types/
+
+# Logs & debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug/
+.cargo-cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.code-workspace
+
+# Python tooling accidental
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Graphify / artefactos de análisis local
+graphify-out/
+
+# Backup / temp
+*.bak
+*.tmp
+*.temp
+.cache/

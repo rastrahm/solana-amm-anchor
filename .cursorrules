@@ -1,0 +1,76 @@
+# .cursorrules — solana-amm-anchor
+
+## MODULE OVERVIEW
+Build a production-grade constant-product AMM (x * y = k) in Solana using Rust, Anchor, and SPL Token / Token-2022 interfaces. Enforce strict BPF byte alignment, deterministic PDA state layouts, and systematic mitigations against all Sealevel attack vectors and Solana Program Security course vulnerabilities.
+
+---
+
+## 1. TECHNICAL CONSTRAINTS & STACK
+
+- **Framework:** Anchor 0.30+ compatible syntax.
+- **Language:** Rust 1.75+ target BPF/SBF.
+- **Token Interfaces:** `anchor_spl::token_interface` (`TokenInterface`, `Mint`, `TokenAccount`) to ensure backward/forward compatibility with `spl-token` and `spl-token-2022`.
+- **System Types:** Explicit zero-copy or compact Borsh serialization without dynamic sizing.
+
+---
+
+## 2. BYTE OPTIMIZATION & MEMORY LAYOUT
+
+- **Exact Size Allocation:** Derive account space statically via Anchor's `#[derive(InitSpace)]`:
+  `8 (Discriminator) + Config::INIT_SPACE`. No arbitrary padding or unindexed excess bytes.
+- **Field Alignment (Descending Size Rule):** Layout structs strictly ordered by byte size to satisfy 8-byte BPF memory alignment, removing implicit compiler padding:
+  1. `Option<Pubkey>` [33 bytes]
+  2. `Pubkey` [32 bytes]
+  3. `u64` [8 bytes]
+  4. `u16` [2 bytes]
+  5. `u8` [1 byte]
+- **Heap & Stack Constraints:** Minimize on-stack array allocations (`[u8; N]`) to avoid stack overflow in BPF (max 4KB limit). Pass accounts by reference and use CPI contexts efficiently.
+
+---
+
+## 3. SEALEVEL ATTACKS & PROGRAM SECURITY MITIGATIONS
+
+### A. Signer & Ownership Verification
+- **Missing Signer Check:** Ensure all state modification or token transfer instructions validate authorities using `Signer<'info>` instead of `AccountInfo<'info>`.
+- **Owner Verification:** Validate that every input token account and mint belongs to the expected `TokenProgram` or `Token2022` using Anchor's `InterfaceAccount<'info, TokenAccount>` or explicit `owner = token_program.key()`.
+
+### B. Type Cosplay & Discriminators
+- **Account Type Checking:** All custom state accounts must use Anchor's `#[account]` macro to enforce the 8-byte discriminator check, preventing unvalidated `AccountInfo` substitution attacks.
+
+### C. Re-initialization & Account Lifecycle
+- **Unchecked Initialization:** Use Anchor's `init` constraint combined with explicit PDAs to enforce atomic creation via `SystemProgram::create_account`.
+- **Account Closing & Closing Attack:** When closing accounts (e.g., closing vault accounts), clear remaining lamports using `close = destination` and zero out account data to prevent re-entrancy / post-close instruction execution within the same transaction.
+
+### D. Arbitrary CPI & Program ID Checks
+- **CPI Program Validation:** Validate program addresses before CPI invocation (`token_program: Interface<'info, TokenInterface>`). Never invoke CPIs using arbitrary, unconstrained `AccountInfo` inputs.
+
+### E. PDA Canonical Bump & Seed Validation
+- **Canonical Bump:** Store the canonical bump in the `Config` account during initialization. In subsequent instructions, pass `bump = config.config_bump` rather than recalculating or accepting arbitrary bumps from client arguments.
+
+### F. Duplicate Account Vulnerability
+- **Aliasing / Duplicate Accounts:** Verify that `user_x` and `user_y` or `vault_x` and `vault_y` are distinct keys using `require_keys_neq!(vault_x.key(), vault_y.key(), AmmError::IdenticalVaults)`.
+
+### G. Precision Loss, Underflow & First Deposit Exploits
+- **Arithmetic Safety:** Enforce `checked_add`, `checked_mul`, `checked_div`, and `checked_sqrt` on all math calculations. Cast intermediate calculations to `u128` to avoid integer overflow.
+- **LP Token Dilution / Inflation Attack:** Lock minimum liquidity (e.g., 1000 LP tokens) during the initial pool deposit (`Initialize` / `First Deposit`) by burning them or locking them in a un-spendable PDA to prevent first-depositor share manipulation attacks.
+- **Slippage Bounds:** Require `min_amount_out` or `max_amount_in` parameters on `swap` and `withdraw` instructions to protect against MEV front-running / sandwich attacks.
+
+---
+
+## 4. CODING & MATHEMATICAL SECURITY RULES
+
+- **Constant Product Formula:**
+  $$k = x \cdot y$$
+  Ensure that post-swap invariant satisfies:
+  $$(x + \Delta x_{\text{fee}}) \cdot (y - \Delta y) \ge k$$
+- **Transfer Operations:** Always use `transfer_checked` passing `mint.decimals` explicitly instead of unsafe `transfer`.
+
+---
+
+## 5. TESTING & AUDITING BENCHMARKS
+
+- **Type Cosplay Attack Test:** Assert failure when passing an invalid state account with identical byte size but incorrect discriminator.
+- **Arbitrary CPI Attack Test:** Assert failure when substituting `token_program` with a dummy malicious program.
+- **Duplicate Account Test:** Verify rejection when `vault_x` and `vault_y` point to the same account address.
+- **First-Deposit Inflation Test:** Test edge cases with $1$ lamport/token initial liquidity deposits to confirm rounding down does not drain reserves.
+- **Rent Exemption & Allocation Benchmark:** Validate that allocated space matches `8 + Config::INIT_SPACE` without extra padding overhead.
