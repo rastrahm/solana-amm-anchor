@@ -31,7 +31,7 @@ Autorizo Fase N — <nombre>
 | 4 | Instrucción `withdraw` | COMPLETADA | SÍ | SÍ |
 | 5 | Instrucción `swap` | COMPLETADA | SÍ | SÍ |
 | 6 | Suite de seguridad Sealevel | COMPLETADA | SÍ | SÍ |
-| 7 | Cliente / frontend Next.js | PENDIENTE | NO | NO |
+| 7 | Cliente / frontend Next.js | COMPLETADA | SÍ | SÍ |
 | 8 | Hardening, docs finales y checklist de auditoría | PENDIENTE | NO | NO |
 
 ---
@@ -223,19 +223,25 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** UI mínima para interactuar con el AMM (wallet, pool, swap, LP).
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
-- App Router: `'use client'` / `'use server'` explícitos
-- Zod en inputs de formularios y parámetros
-- Vitest + RTL antes de componentes
-- Componentes ≤ ~60 líneas cuando sea razonable
-- `error.tsx` / `not-found.tsx` en rutas principales
+- [x] App en `app/` (Next.js 15 App Router)
+- [x] `'use client'` / server layout explícitos
+- [x] Zod (`schemas/pool.ts`) para initialize / deposit / withdraw / swap
+- [x] Vitest + RTL (12 tests)
+- [x] `error.tsx` / `not-found.tsx`
+- [x] Wallet adapter (Phantom) + paneles Init / Deposit / Swap / Withdraw
+- [x] IDL copiado en `app/src/lib/idl/`
 
 **Criterios de aceptación:**
-- Tipado estricto (cero `any`)
-- JSDoc en componentes/actions/hooks públicos
-- Flujo demo: connect → init/deposit/swap/withdraw en localnet/devnet
+- [x] Tipado estricto (sin `any`)
+- [x] JSDoc en componentes/hooks públicos
+- [x] `npm run test` y `npm run build` OK en `app/`
 
-**Dependencias:** Fases 0–5 (idealmente también 6)  
+**Uso rápido:** `cd app && cp .env.example .env.local && npm install && npm run dev`
+
+**Dependencias:** Fases 0–6  
 **Autorización requerida:** sí
 
 ---

@@ -16,6 +16,9 @@ keys/
 
 # Node / TypeScript tests & frontend
 node_modules/
+app/node_modules/
+app/.next/
+app/out/
 dist/
 build/
 .next/
