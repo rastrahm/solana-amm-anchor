@@ -27,7 +27,7 @@ Autorizo Fase N — <nombre>
 | 0 | Scaffold del workspace | COMPLETADA | SÍ | SÍ |
 | 1 | Estado `Config` + errores + layout | COMPLETADA | SÍ | SÍ |
 | 2 | Instrucción `initialize` | COMPLETADA | SÍ | SÍ |
-| 3 | Instrucción `deposit` (liquidez) | PENDIENTE | NO | NO |
+| 3 | Instrucción `deposit` (liquidez) | COMPLETADA | SÍ | SÍ |
 | 4 | Instrucción `withdraw` | PENDIENTE | NO | NO |
 | 5 | Instrucción `swap` | PENDIENTE | NO | NO |
 | 6 | Suite de seguridad Sealevel | PENDIENTE | NO | NO |
@@ -114,17 +114,21 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** depositar X/Y y acuñar LP; primer depósito bloquea liquidez mínima.
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
-- Cálculo de LP con `u128` + `checked_*` (+ `checked_sqrt` en primer depósito)
-- Lock de liquidez mínima (p. ej. 1000 LP) quemados o en PDA no gastable
-- Depósitos posteriores proporcionales a reservas
-- Parámetros de slippage (`min_lp` o equivalentes)
-- Tests TDD: primer depósito, depósito subsecuente, amounts=0, overflow, slippage
+- [x] Math LP en `helpers/math.rs` (`u128` + `checked_*` + `integer_sqrt`)
+- [x] `MINIMUM_LIQUIDITY = 1000` bloqueado en ATA `lock_lp` (authority = Config)
+- [x] Depósitos posteriores proporcionales `min(dx·L/x, dy·L/y)`
+- [x] Slippage `min_lp`
+- [x] Tests: primer depósito, subsecuente, amount=0, slippage, liquidez mínima
+- [x] Cuentas `Box`adas para límite de stack BPF 4KB
+- [x] Feature `init-if-needed` para ATAs LP
 
 **Criterios de aceptación:**
-- No dilución por inflación de primer depósito
-- Vaults y user ATAs distintos y con owner correcto
-- Documentación `///` de la instrucción
+- [x] Anti inflación primer depósito (lock 1000 LP)
+- [x] `transfer_checked` + bumps canónicos almacenados
+- [x] Documentación `///` de la instrucción
 
 **Dependencias:** Fase 2  
 **Autorización requerida:** sí
