@@ -73,4 +73,20 @@ pub mod amm {
     ) -> Result<()> {
         instructions::withdraw::handler(ctx, lp_amount, min_x, min_y)
     }
+
+    /// @notice Swaps an exact input amount for the other pool token.
+    /// @dev Fee on input; enforces constant-product invariant and `min_amount_out`.
+    /// @param ctx Accounts context (`Swap`).
+    /// @param is_x `true` for X→Y, `false` for Y→X.
+    /// @param amount_in Exact tokens sent by the user.
+    /// @param min_amount_out Minimum acceptable output (slippage).
+    /// @return Result<()> Ok when both transfers complete.
+    pub fn swap(
+        ctx: Context<Swap>,
+        is_x: bool,
+        amount_in: u64,
+        min_amount_out: u64,
+    ) -> Result<()> {
+        instructions::swap::handler(ctx, is_x, amount_in, min_amount_out)
+    }
 }

@@ -731,4 +731,302 @@ describe("amm", () => {
       expect(Number(lpMint.supply)).to.equal(MINIMUM_LIQUIDITY);
     });
   });
+
+  describe("phase5: swap", () => {
+    const FEE_BPS = 30;
+    const FEE_DENOM = 10_000n;
+
+    function expectedAmountOut(
+      amountIn: bigint,
+      reserveIn: bigint,
+      reserveOut: bigint,
+      feeBps: number
+    ): bigint {
+      const feeMultiplier = FEE_DENOM - BigInt(feeBps);
+      const amountInWithFee = amountIn * feeMultiplier;
+      const numerator = amountInWithFee * reserveOut;
+      const denominator = reserveIn * FEE_DENOM + amountInWithFee;
+      return numerator / denominator;
+    }
+
+    async function swapTokens(args: {
+      seed: BN;
+      mintX: PublicKey;
+      mintY: PublicKey;
+      isX: boolean;
+      amountIn: BN;
+      minOut: BN;
+    }) {
+      const { config } = derivePoolPdas(args.seed);
+      const vaultX = getAssociatedTokenAddressSync(
+        args.mintX,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+      const vaultY = getAssociatedTokenAddressSync(
+        args.mintY,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+      const userX = getAssociatedTokenAddressSync(
+        args.mintX,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const userY = getAssociatedTokenAddressSync(
+        args.mintY,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+
+      const tx = await program.methods
+        .swap(args.isX, args.amountIn, args.minOut)
+        .accountsPartial({
+          user: wallet.publicKey,
+          mintX: args.mintX,
+          mintY: args.mintY,
+          config,
+          vaultX,
+          vaultY,
+          userX,
+          userY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      return { tx, config, vaultX, vaultY, userX, userY };
+    }
+
+    async function setupSwapPool(seed: BN) {
+      const [mintX, mintY] = await createPairMints();
+      await initializePool({
+        seed,
+        fee: FEE_BPS,
+        authority: null,
+        mintX,
+        mintY,
+      });
+      // Fund LP + extra for swapping
+      await fundUserAtas(mintX, mintY, 5_000_000n, 5_000_000n);
+      await depositLiquidity({
+        seed,
+        mintX,
+        mintY,
+        amountX: new BN(1_000_000),
+        amountY: new BN(1_000_000),
+        minLp: new BN(1_000_000 - MINIMUM_LIQUIDITY),
+      });
+      return { mintX, mintY };
+    }
+
+    it("swaps X→Y with fee and preserves k invariant", async () => {
+      const seed = new BN(300);
+      const { mintX, mintY } = await setupSwapPool(seed);
+      const { config } = derivePoolPdas(seed);
+      const vaultX = getAssociatedTokenAddressSync(mintX, config, true, TOKEN_PROGRAM_ID);
+      const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+      const userY = getAssociatedTokenAddressSync(
+        mintY,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+
+      const amountIn = 10_000n;
+      const vaultXBefore = await getAccount(connection, vaultX);
+      const vaultYBefore = await getAccount(connection, vaultY);
+      const userYBefore = await getAccount(connection, userY);
+
+      const expectedOut = expectedAmountOut(
+        amountIn,
+        vaultXBefore.amount,
+        vaultYBefore.amount,
+        FEE_BPS
+      );
+
+      await swapTokens({
+        seed,
+        mintX,
+        mintY,
+        isX: true,
+        amountIn: new BN(amountIn.toString()),
+        minOut: new BN(expectedOut.toString()),
+      });
+
+      const vaultXAfter = await getAccount(connection, vaultX);
+      const vaultYAfter = await getAccount(connection, vaultY);
+      const userYAfter = await getAccount(connection, userY);
+
+      expect(vaultXAfter.amount).to.equal(vaultXBefore.amount + amountIn);
+      expect(vaultYAfter.amount).to.equal(vaultYBefore.amount - expectedOut);
+      expect(userYAfter.amount - userYBefore.amount).to.equal(expectedOut);
+
+      const kBefore = vaultXBefore.amount * vaultYBefore.amount;
+      const kAfter = vaultXAfter.amount * vaultYAfter.amount;
+      expect(kAfter >= kBefore).to.equal(true);
+    });
+
+    it("swaps Y→X", async () => {
+      const seed = new BN(301);
+      const { mintX, mintY } = await setupSwapPool(seed);
+      const { config } = derivePoolPdas(seed);
+      const vaultX = getAssociatedTokenAddressSync(mintX, config, true, TOKEN_PROGRAM_ID);
+      const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+      const userX = getAssociatedTokenAddressSync(
+        mintX,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+
+      const amountIn = 5_000n;
+      const vaultXBefore = await getAccount(connection, vaultX);
+      const vaultYBefore = await getAccount(connection, vaultY);
+      const userXBefore = await getAccount(connection, userX);
+      const expectedOut = expectedAmountOut(
+        amountIn,
+        vaultYBefore.amount,
+        vaultXBefore.amount,
+        FEE_BPS
+      );
+
+      await swapTokens({
+        seed,
+        mintX,
+        mintY,
+        isX: false,
+        amountIn: new BN(amountIn.toString()),
+        minOut: new BN(expectedOut.toString()),
+      });
+
+      const userXAfter = await getAccount(connection, userX);
+      expect(userXAfter.amount - userXBefore.amount).to.equal(expectedOut);
+    });
+
+    it("rejects slippage when min_amount_out is too high", async () => {
+      const seed = new BN(302);
+      const { mintX, mintY } = await setupSwapPool(seed);
+
+      try {
+        await swapTokens({
+          seed,
+          mintX,
+          mintY,
+          isX: true,
+          amountIn: new BN(10_000),
+          minOut: new BN(1_000_000),
+        });
+        expect.fail("expected SlippageExceeded");
+      } catch (err: unknown) {
+        expect(errorBlob(err)).to.match(/SlippageExceeded|6003|0x1773/i);
+      }
+    });
+
+    it("rejects zero amount_in", async () => {
+      const seed = new BN(303);
+      const { mintX, mintY } = await setupSwapPool(seed);
+
+      try {
+        await swapTokens({
+          seed,
+          mintX,
+          mintY,
+          isX: true,
+          amountIn: new BN(0),
+          minOut: new BN(0),
+        });
+        expect.fail("expected InvalidAmount");
+      } catch (err: unknown) {
+        expect(errorBlob(err)).to.match(/InvalidAmount|6008|0x1778/i);
+      }
+    });
+
+    it("fee reduces output versus zero-fee pool", async () => {
+      // Pool A: fee 30, Pool B: fee 0 — same reserves/input → A out < B out
+      const seedFee = new BN(304);
+      const seedFree = new BN(305);
+
+      const [mintX1, mintY1] = await createPairMints();
+      await initializePool({
+        seed: seedFee,
+        fee: 30,
+        authority: null,
+        mintX: mintX1,
+        mintY: mintY1,
+      });
+      await fundUserAtas(mintX1, mintY1, 2_000_000n, 2_000_000n);
+      await depositLiquidity({
+        seed: seedFee,
+        mintX: mintX1,
+        mintY: mintY1,
+        amountX: new BN(1_000_000),
+        amountY: new BN(1_000_000),
+        minLp: new BN(1_000_000 - MINIMUM_LIQUIDITY),
+      });
+
+      const [mintX2, mintY2] = await createPairMints();
+      await initializePool({
+        seed: seedFree,
+        fee: 0,
+        authority: null,
+        mintX: mintX2,
+        mintY: mintY2,
+      });
+      await fundUserAtas(mintX2, mintY2, 2_000_000n, 2_000_000n);
+      await depositLiquidity({
+        seed: seedFree,
+        mintX: mintX2,
+        mintY: mintY2,
+        amountX: new BN(1_000_000),
+        amountY: new BN(1_000_000),
+        minLp: new BN(1_000_000 - MINIMUM_LIQUIDITY),
+      });
+
+      const amountIn = 10_000n;
+      const outFee = expectedAmountOut(amountIn, 1_000_000n, 1_000_000n, 30);
+      const outFree = expectedAmountOut(amountIn, 1_000_000n, 1_000_000n, 0);
+      expect(outFee < outFree).to.equal(true);
+
+      const userY1 = getAssociatedTokenAddressSync(
+        mintY1,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const userY2 = getAssociatedTokenAddressSync(
+        mintY2,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const y1Before = await getAccount(connection, userY1);
+      const y2Before = await getAccount(connection, userY2);
+
+      await swapTokens({
+        seed: seedFee,
+        mintX: mintX1,
+        mintY: mintY1,
+        isX: true,
+        amountIn: new BN(amountIn.toString()),
+        minOut: new BN(outFee.toString()),
+      });
+      await swapTokens({
+        seed: seedFree,
+        mintX: mintX2,
+        mintY: mintY2,
+        isX: true,
+        amountIn: new BN(amountIn.toString()),
+        minOut: new BN(outFree.toString()),
+      });
+
+      const y1After = await getAccount(connection, userY1);
+      const y2After = await getAccount(connection, userY2);
+      expect(y1After.amount - y1Before.amount).to.equal(outFee);
+      expect(y2After.amount - y2Before.amount).to.equal(outFree);
+    });
+  });
 });
