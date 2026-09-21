@@ -57,4 +57,20 @@ pub mod amm {
     ) -> Result<()> {
         instructions::deposit::handler(ctx, amount_x, amount_y, min_lp)
     }
+
+    /// @notice Burns LP and withdraws proportional X/Y to the user.
+    /// @dev Floor division favors the pool; cannot burn below `MINIMUM_LIQUIDITY` supply.
+    /// @param ctx Accounts context (`Withdraw`).
+    /// @param lp_amount LP tokens to burn.
+    /// @param min_x Minimum token X out (slippage).
+    /// @param min_y Minimum token Y out (slippage).
+    /// @return Result<()> Ok when burn and transfers complete.
+    pub fn withdraw(
+        ctx: Context<Withdraw>,
+        lp_amount: u64,
+        min_x: u64,
+        min_y: u64,
+    ) -> Result<()> {
+        instructions::withdraw::handler(ctx, lp_amount, min_x, min_y)
+    }
 }

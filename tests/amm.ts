@@ -506,4 +506,229 @@ describe("amm", () => {
       }
     });
   });
+
+  describe("phase4: withdraw", () => {
+    async function withdrawLiquidity(args: {
+      seed: BN;
+      mintX: PublicKey;
+      mintY: PublicKey;
+      lpAmount: BN;
+      minX: BN;
+      minY: BN;
+    }) {
+      const { config, mintLp } = derivePoolPdas(args.seed);
+      const vaultX = getAssociatedTokenAddressSync(
+        args.mintX,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+      const vaultY = getAssociatedTokenAddressSync(
+        args.mintY,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+      const userX = getAssociatedTokenAddressSync(
+        args.mintX,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const userY = getAssociatedTokenAddressSync(
+        args.mintY,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const userLp = getAssociatedTokenAddressSync(
+        mintLp,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+
+      const tx = await program.methods
+        .withdraw(args.lpAmount, args.minX, args.minY)
+        .accountsPartial({
+          user: wallet.publicKey,
+          mintX: args.mintX,
+          mintY: args.mintY,
+          mintLp,
+          config,
+          vaultX,
+          vaultY,
+          userX,
+          userY,
+          userLp,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      return { tx, config, mintLp, vaultX, vaultY, userX, userY, userLp };
+    }
+
+    async function setupPoolWithLiquidity(seed: BN, depositAmount = 1_000_000n) {
+      const [mintX, mintY] = await createPairMints();
+      await initializePool({
+        seed,
+        fee: 30,
+        authority: null,
+        mintX,
+        mintY,
+      });
+      await fundUserAtas(mintX, mintY, depositAmount * 2n, depositAmount * 2n);
+      const deposited = await depositLiquidity({
+        seed,
+        mintX,
+        mintY,
+        amountX: new BN(depositAmount.toString()),
+        amountY: new BN(depositAmount.toString()),
+        minLp: new BN(Number(depositAmount) - MINIMUM_LIQUIDITY),
+      });
+      return { mintX, mintY, ...deposited, depositAmount };
+    }
+
+    it("burns LP and returns proportional X/Y", async () => {
+      const seed = new BN(200);
+      const { mintX, mintY, userLp, vaultX, vaultY, depositAmount } =
+        await setupPoolWithLiquidity(seed);
+
+      const userX = getAssociatedTokenAddressSync(
+        mintX,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const userY = getAssociatedTokenAddressSync(
+        mintY,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+
+      const burnLp = 500_000;
+      const userXBefore = await getAccount(connection, userX);
+      const userYBefore = await getAccount(connection, userY);
+
+      await withdrawLiquidity({
+        seed,
+        mintX,
+        mintY,
+        lpAmount: new BN(burnLp),
+        minX: new BN(burnLp),
+        minY: new BN(burnLp),
+      });
+
+      const userLpAfter = await getAccount(connection, userLp);
+      const vaultXAfter = await getAccount(connection, vaultX);
+      const vaultYAfter = await getAccount(connection, vaultY);
+      const userXAfter = await getAccount(connection, userX);
+      const userYAfter = await getAccount(connection, userY);
+      const lpMint = await getMint(connection, derivePoolPdas(seed).mintLp);
+
+      expect(Number(userLpAfter.amount)).to.equal(
+        Number(depositAmount) - MINIMUM_LIQUIDITY - burnLp
+      );
+      expect(Number(vaultXAfter.amount)).to.equal(Number(depositAmount) - burnLp);
+      expect(Number(vaultYAfter.amount)).to.equal(Number(depositAmount) - burnLp);
+      expect(Number(userXAfter.amount - userXBefore.amount)).to.equal(burnLp);
+      expect(Number(userYAfter.amount - userYBefore.amount)).to.equal(burnLp);
+      expect(Number(lpMint.supply)).to.equal(Number(depositAmount) - burnLp);
+    });
+
+    it("rejects slippage when min_x/min_y are too high", async () => {
+      const seed = new BN(201);
+      const { mintX, mintY } = await setupPoolWithLiquidity(seed);
+
+      try {
+        await withdrawLiquidity({
+          seed,
+          mintX,
+          mintY,
+          lpAmount: new BN(100_000),
+          minX: new BN(1_000_000),
+          minY: new BN(0),
+        });
+        expect.fail("expected SlippageExceeded");
+      } catch (err: unknown) {
+        expect(errorBlob(err)).to.match(/SlippageExceeded|6003|0x1773/i);
+      }
+    });
+
+    it("rejects withdrawing more LP than the user holds", async () => {
+      const seed = new BN(202);
+      const { mintX, mintY } = await setupPoolWithLiquidity(seed);
+
+      try {
+        await withdrawLiquidity({
+          seed,
+          mintX,
+          mintY,
+          lpAmount: new BN(2_000_000),
+          minX: new BN(0),
+          minY: new BN(0),
+        });
+        expect.fail("expected InsufficientLiquidity");
+      } catch (err: unknown) {
+        expect(errorBlob(err)).to.match(/InsufficientLiquidity|6005|0x1775/i);
+      }
+    });
+
+    it("rejects burning that would drop supply below MINIMUM_LIQUIDITY", async () => {
+      const seed = new BN(203);
+      const { mintX, mintY } = await setupPoolWithLiquidity(seed);
+      // User holds 999_000; burning all would leave supply = 1000 (OK).
+      // Burning 999_001 is more than user has — use a second depositor scenario:
+      // After first deposit supply=1_000_000. Burn 999_001 from a user who somehow
+      // had that much — user only has 999_000. So burn exactly 999_000 is OK.
+      // To violate remaining >= MINIMUM, need burn > total - MINIMUM = 999_000.
+      // User only has 999_000, so burn 999_000 leaves exactly MINIMUM — allowed.
+      // Add second deposit so user has more LP, then try to burn past the lock.
+      await depositLiquidity({
+        seed,
+        mintX,
+        mintY,
+        amountX: new BN(1_000_000),
+        amountY: new BN(1_000_000),
+        minLp: new BN(1_000_000),
+      });
+      // supply now 2_000_000; user LP = 999_000 + 1_000_000 = 1_999_000
+      // Max burn allowed = 2_000_000 - 1_000 = 1_999_000 (exactly leaves lock)
+      // Try burn 1_999_001 → should fail
+      try {
+        await withdrawLiquidity({
+          seed,
+          mintX,
+          mintY,
+          lpAmount: new BN(1_999_001),
+          minX: new BN(0),
+          minY: new BN(0),
+        });
+        expect.fail("expected InsufficientLiquidity");
+      } catch (err: unknown) {
+        expect(errorBlob(err)).to.match(/InsufficientLiquidity|6005|0x1775/i);
+      }
+    });
+
+    it("allows withdrawing all user LP leaving locked MINIMUM_LIQUIDITY", async () => {
+      const seed = new BN(204);
+      const { mintX, mintY, userLp, depositAmount } = await setupPoolWithLiquidity(seed);
+      const userLpAmount = Number(depositAmount) - MINIMUM_LIQUIDITY;
+
+      await withdrawLiquidity({
+        seed,
+        mintX,
+        mintY,
+        lpAmount: new BN(userLpAmount),
+        minX: new BN(userLpAmount),
+        minY: new BN(userLpAmount),
+      });
+
+      const userLpAfter = await getAccount(connection, userLp);
+      const lpMint = await getMint(connection, derivePoolPdas(seed).mintLp);
+      expect(Number(userLpAfter.amount)).to.equal(0);
+      expect(Number(lpMint.supply)).to.equal(MINIMUM_LIQUIDITY);
+    });
+  });
 });
