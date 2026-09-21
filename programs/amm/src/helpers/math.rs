@@ -45,7 +45,10 @@ pub fn lp_tokens_for_deposit(
     total_lp: u64,
 ) -> Result<(u64, bool)> {
     if total_lp == 0 {
-        require!(reserve_x == 0 && reserve_y == 0, AmmError::InsufficientLiquidity);
+        require!(
+            reserve_x == 0 && reserve_y == 0,
+            AmmError::InsufficientLiquidity
+        );
 
         let product = (amount_x as u128)
             .checked_mul(amount_y as u128)
@@ -60,7 +63,10 @@ pub fn lp_tokens_for_deposit(
             .ok_or(AmmError::MathOverflow)?;
         Ok((user_lp, true))
     } else {
-        require!(reserve_x > 0 && reserve_y > 0, AmmError::InsufficientLiquidity);
+        require!(
+            reserve_x > 0 && reserve_y > 0,
+            AmmError::InsufficientLiquidity
+        );
 
         let lp_from_x = (amount_x as u128)
             .checked_mul(total_lp as u128)
@@ -95,7 +101,10 @@ pub fn amounts_for_withdraw(
     total_lp: u64,
 ) -> Result<(u64, u64)> {
     require!(lp_amount > 0, AmmError::InvalidAmount);
-    require!(total_lp > 0 && reserve_x > 0 && reserve_y > 0, AmmError::InsufficientLiquidity);
+    require!(
+        total_lp > 0 && reserve_x > 0 && reserve_y > 0,
+        AmmError::InsufficientLiquidity
+    );
 
     let remaining = total_lp
         .checked_sub(lp_amount)
@@ -118,7 +127,10 @@ pub fn amounts_for_withdraw(
 
     let amount_x = u64::try_from(amount_x).map_err(|_| error!(AmmError::MathOverflow))?;
     let amount_y = u64::try_from(amount_y).map_err(|_| error!(AmmError::MathOverflow))?;
-    require!(amount_x > 0 && amount_y > 0, AmmError::InsufficientLiquidity);
+    require!(
+        amount_x > 0 && amount_y > 0,
+        AmmError::InsufficientLiquidity
+    );
 
     Ok((amount_x, amount_y))
 }
@@ -143,7 +155,10 @@ pub fn amount_out_for_swap(
     fee_bps: u16,
 ) -> Result<u64> {
     require!(amount_in > 0, AmmError::InvalidAmount);
-    require!(reserve_in > 0 && reserve_out > 0, AmmError::InsufficientLiquidity);
+    require!(
+        reserve_in > 0 && reserve_out > 0,
+        AmmError::InsufficientLiquidity
+    );
     require!(fee_bps as u128 <= FEE_DENOMINATOR, AmmError::InvalidFee);
 
     let fee_multiplier = FEE_DENOMINATOR
@@ -170,7 +185,10 @@ pub fn amount_out_for_swap(
         .checked_div(denominator)
         .ok_or(AmmError::MathOverflow)?;
     require!(amount_out_u > 0, AmmError::InsufficientLiquidity);
-    require!(amount_out_u < reserve_out_u, AmmError::InsufficientLiquidity);
+    require!(
+        amount_out_u < reserve_out_u,
+        AmmError::InsufficientLiquidity
+    );
 
     let amount_out = u64::try_from(amount_out_u).map_err(|_| error!(AmmError::MathOverflow))?;
 
@@ -206,18 +224,14 @@ mod tests {
 
     #[test]
     fn first_deposit_locks_minimum_liquidity() {
-        let (user_lp, lock) =
-            lp_tokens_for_deposit(1_000_000, 1_000_000, 0, 0, 0).unwrap();
+        let (user_lp, lock) = lp_tokens_for_deposit(1_000_000, 1_000_000, 0, 0, 0).unwrap();
         assert!(lock);
         assert_eq!(user_lp, 1_000_000 - MINIMUM_LIQUIDITY);
     }
 
     #[test]
     fn first_deposit_rejects_tiny_liquidity() {
-        let err = lp_tokens_for_deposit(10, 10, 0, 0, 0).unwrap_err();
-        // InsufficientLiquidity when sqrt <= MINIMUM_LIQUIDITY
-        assert!(err.to_string().contains("InsufficientLiquidity") || true);
-        let _ = err;
+        assert!(lp_tokens_for_deposit(10, 10, 0, 0, 0).is_err());
     }
 
     #[test]
@@ -230,8 +244,7 @@ mod tests {
 
     #[test]
     fn withdraw_is_proportional_floor() {
-        let (x, y) =
-            amounts_for_withdraw(500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
+        let (x, y) = amounts_for_withdraw(500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
         assert_eq!(x, 500_000);
         assert_eq!(y, 500_000);
     }
@@ -244,15 +257,14 @@ mod tests {
 
     #[test]
     fn withdraw_allows_burning_all_user_lp_leaving_lock() {
-        let (x, y) =
-            amounts_for_withdraw(999_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
+        let (x, y) = amounts_for_withdraw(999_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
         assert_eq!(x, 999_000);
         assert_eq!(y, 999_000);
     }
 
     #[test]
     fn swap_zero_fee_matches_constant_product() {
-        // amount_out = 1000 * 1000 / (1000 + 1000) = 500 with 0 fee? 
+        // amount_out = 1000 * 1000 / (1000 + 1000) = 500 with 0 fee?
         // formula: (1000 * 10000 * 1000) / (1000 * 10000 + 1000 * 10000) = 10_000_000_000 / 20_000_000 = 500
         let out = amount_out_for_swap(1_000, 1_000, 1_000, 0).unwrap();
         assert_eq!(out, 500);

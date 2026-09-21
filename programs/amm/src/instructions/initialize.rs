@@ -76,7 +76,7 @@ pub struct Initialize<'info> {
 /// @param fee Swap fee in basis points (`<= MAX_FEE_BPS`).
 /// @param authority Optional admin pubkey; `None` leaves the pool without an admin.
 /// @return Result<()> Ok if accounts were created and Config was written.
-pub fn handler(
+pub(crate) fn handler(
     ctx: Context<Initialize>,
     seed: u64,
     fee: u16,

@@ -55,8 +55,8 @@ flowchart LR
 flowchart TB
     subgraph Init["initialize"]
         I1[Initializer firma + paga rent] --> I2[Crear Config PDA]
-        I2 --> I3[Crear Vault X / Vault Y]
-        I3 --> I4[Crear Mint LP]
+        I2 --> I3[Crear Mint LP]
+        I3 --> I4[Crear Vault ATAs X/Y tras checks]
         I4 --> I5[Persistir fee, authority, bumps]
     end
 

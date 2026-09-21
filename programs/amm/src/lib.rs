@@ -6,6 +6,10 @@
 //! - [`errors`] — `#[error_code]` definitions (`AmmError`)
 //! - [`helpers`] — checked math and liquidity constants
 
+// Anchor macros emit host-side `cfg` / deprecated noise (e.g. `anchor-debug`, `realloc`).
+#![allow(unexpected_cfgs)]
+#![allow(deprecated)]
+
 use anchor_lang::prelude::*;
 
 pub mod errors;
@@ -49,12 +53,7 @@ pub mod amm {
     /// @param amount_y Amount of token Y to deposit.
     /// @param min_lp Minimum acceptable LP minted (slippage protection).
     /// @return Result<()> Ok when the deposit completes.
-    pub fn deposit(
-        ctx: Context<Deposit>,
-        amount_x: u64,
-        amount_y: u64,
-        min_lp: u64,
-    ) -> Result<()> {
+    pub fn deposit(ctx: Context<Deposit>, amount_x: u64, amount_y: u64, min_lp: u64) -> Result<()> {
         instructions::deposit::handler(ctx, amount_x, amount_y, min_lp)
     }
 
@@ -65,12 +64,7 @@ pub mod amm {
     /// @param min_x Minimum token X out (slippage).
     /// @param min_y Minimum token Y out (slippage).
     /// @return Result<()> Ok when burn and transfers complete.
-    pub fn withdraw(
-        ctx: Context<Withdraw>,
-        lp_amount: u64,
-        min_x: u64,
-        min_y: u64,
-    ) -> Result<()> {
+    pub fn withdraw(ctx: Context<Withdraw>, lp_amount: u64, min_x: u64, min_y: u64) -> Result<()> {
         instructions::withdraw::handler(ctx, lp_amount, min_x, min_y)
     }
 
@@ -81,12 +75,7 @@ pub mod amm {
     /// @param amount_in Exact tokens sent by the user.
     /// @param min_amount_out Minimum acceptable output (slippage).
     /// @return Result<()> Ok when both transfers complete.
-    pub fn swap(
-        ctx: Context<Swap>,
-        is_x: bool,
-        amount_in: u64,
-        min_amount_out: u64,
-    ) -> Result<()> {
+    pub fn swap(ctx: Context<Swap>, is_x: bool, amount_in: u64, min_amount_out: u64) -> Result<()> {
         instructions::swap::handler(ctx, is_x, amount_in, min_amount_out)
     }
 }

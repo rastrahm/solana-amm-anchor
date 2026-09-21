@@ -98,7 +98,7 @@ pub struct Withdraw<'info> {
 /// @param min_x Slippage guard: minimum token X received.
 /// @param min_y Slippage guard: minimum token Y received.
 /// @return Result<()> Ok when burn and transfers succeed.
-pub fn handler(
+pub(crate) fn handler(
     ctx: Context<Withdraw>,
     lp_amount: u64,
     min_x: u64,
@@ -120,9 +120,11 @@ pub fn handler(
     let reserve_y = ctx.accounts.vault_y.amount;
     let total_lp = ctx.accounts.mint_lp.supply;
 
-    let (amount_x, amount_y) =
-        amounts_for_withdraw(lp_amount, reserve_x, reserve_y, total_lp)?;
-    require!(amount_x >= min_x && amount_y >= min_y, AmmError::SlippageExceeded);
+    let (amount_x, amount_y) = amounts_for_withdraw(lp_amount, reserve_x, reserve_y, total_lp)?;
+    require!(
+        amount_x >= min_x && amount_y >= min_y,
+        AmmError::SlippageExceeded
+    );
 
     // Burn LP from the user first, then send underlying tokens.
     burn(
@@ -139,11 +141,7 @@ pub fn handler(
 
     let seed_bytes = ctx.accounts.config.seed.to_le_bytes();
     let bump = [ctx.accounts.config.config_bump];
-    let signer_seeds: &[&[&[u8]]] = &[&[
-        CONFIG_SEED,
-        seed_bytes.as_ref(),
-        bump.as_ref(),
-    ]];
+    let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, seed_bytes.as_ref(), bump.as_ref()]];
 
     transfer_checked(
         CpiContext::new_with_signer(

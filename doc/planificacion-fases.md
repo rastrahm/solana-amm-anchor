@@ -250,21 +250,23 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** cierre de calidad producción-ready.
 
+**Estado:** COMPLETADA (autorizada 2026-09-21) — pendiente visto bueno humano de cierre
+
 **Entregables:**
-- Clippy + rustfmt limpios
-- Revisión de compute units en caminos calientes
-- README de uso (build, test, deploy local)
-- Actualizar diagramas si el diseño divergió
-- Matriz final de mitigaciones vs tests
+- [x] Clippy + rustfmt limpios (`handlers` `pub(crate)` para evitar glob ambiguo)
+- [x] Revisión cualitativa de compute units (`doc/auditoria.md` §3)
+- [x] README raíz (build, test, deploy local)
+- [x] Diagramas alineados con init (mint LP → vaults ATA)
+- [x] Matriz final de mitigaciones vs tests (`doc/auditoria.md`)
 
 **Criterios de aceptación:**
-- `anchor test` verde
-- Sin TODOs de seguridad abiertos sin justificación
-- Tú das el visto bueno de cierre
+- [x] `cargo fmt` / `cargo clippy -D warnings` OK
+- [x] `anchor test` verde (28 passing)
+- [x] Sin TODOs de seguridad abiertos en `programs/`
+- [ ] Visto bueno de cierre
 
 **Dependencias:** Fase 6 (y 7 si se autorizó)  
 **Autorización requerida:** sí
-
 ---
 
 ## Orden de trabajo sugerido (resumen)
