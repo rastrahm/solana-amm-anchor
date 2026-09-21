@@ -25,7 +25,7 @@ Autorizo Fase N — <nombre>
 | Fase | Nombre | Estado | Autorizada | Completada |
 |------|--------|--------|------------|------------|
 | 0 | Scaffold del workspace | COMPLETADA | SÍ | SÍ |
-| 1 | Estado `Config` + errores + layout | PENDIENTE | NO | NO |
+| 1 | Estado `Config` + errores + layout | COMPLETADA | SÍ | SÍ |
 | 2 | Instrucción `initialize` | PENDIENTE | NO | NO |
 | 3 | Instrucción `deposit` (liquidez) | PENDIENTE | NO | NO |
 | 4 | Instrucción `withdraw` | PENDIENTE | NO | NO |
@@ -66,16 +66,19 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** definir la cuenta de configuración del pool con layout estático y errores tipados.
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
-- `Config` con `#[account]` + `#[derive(InitSpace)]`
-- Campos ordenados por tamaño descendente (regla BPF): `Option<Pubkey>` → `Pubkey` → `u64` → `u16` → `u8`
-- Espacio exacto: `8 + Config::INIT_SPACE`
-- Bumps canónicos almacenados (`config_bump`, `lp_bump`, etc.)
-- `AmmError` (`#[error_code]`): vaults idénticos, fee inválido, slippage, overflow, pool pausado, etc.
+- [x] `Config` con `#[account]` + `#[derive(InitSpace)]`
+- [x] Campos ordenados por tamaño descendente: `authority` → `mint_*` → `seed` → `fee` → `locked` / bumps
+- [x] Espacio exacto: `Config::ACCOUNT_SPACE = 8 + Config::INIT_SPACE` (= 150)
+- [x] Bumps canónicos: `config_bump`, `lp_bump`
+- [x] `AmmError` (`#[error_code]`): IdenticalVaults, IdenticalMints, InvalidFee, SlippageExceeded, MathOverflow, InsufficientLiquidity, Unauthorized, PoolLocked, InvalidAmount
 
 **Criterios de aceptación:**
-- Test de tamaño de cuenta = `8 + Config::INIT_SPACE`
-- Documentación `///` del struct y de cada error relevante
+- [x] Test Rust: `INIT_SPACE == 142` y `ACCOUNT_SPACE == 8 + INIT_SPACE`
+- [x] Test TS: documenta el mismo tamaño (150)
+- [x] Documentación `///` del struct y de cada error
 
 **Dependencias:** Fase 0  
 **Autorización requerida:** sí

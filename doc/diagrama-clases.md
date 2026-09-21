@@ -17,21 +17,24 @@ classDiagram
     class Config {
         <<account>>
         +Option~Pubkey~ authority
-        +Pubkey seed_related / mint_x
+        +Pubkey mint_x
         +Pubkey mint_y
         +Pubkey mint_lp
-        +u16 fee_bps
+        +u64 seed
+        +u16 fee
+        +bool locked
         +u8 config_bump
         +u8 lp_bump
-        +u8 ...bumps
         --
-        space = 8 + Config::INIT_SPACE
+        INIT_SPACE = 142
+        ACCOUNT_SPACE = 8 + INIT_SPACE = 150
         layout: size-descending fields
     }
 
     class AmmError {
         <<error_code>>
         IdenticalVaults
+        IdenticalMints
         InvalidFee
         SlippageExceeded
         MathOverflow
