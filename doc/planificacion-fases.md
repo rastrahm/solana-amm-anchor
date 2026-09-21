@@ -29,7 +29,7 @@ Autorizo Fase N — <nombre>
 | 2 | Instrucción `initialize` | COMPLETADA | SÍ | SÍ |
 | 3 | Instrucción `deposit` (liquidez) | COMPLETADA | SÍ | SÍ |
 | 4 | Instrucción `withdraw` | COMPLETADA | SÍ | SÍ |
-| 5 | Instrucción `swap` | PENDIENTE | NO | NO |
+| 5 | Instrucción `swap` | COMPLETADA | SÍ | SÍ |
 | 6 | Suite de seguridad Sealevel | PENDIENTE | NO | NO |
 | 7 | Cliente / frontend Next.js | PENDIENTE | NO | NO |
 | 8 | Hardening, docs finales y checklist de auditoría | PENDIENTE | NO | NO |
@@ -161,17 +161,20 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** intercambio constant-product con fee e invariante post-swap.
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
-- Dirección X→Y / Y→X
-- Fee sobre input: `(x + Δx_fee) · (y − Δy) ≥ k`
-- `min_amount_out` / `max_amount_in`
-- Math en `u128` con `checked_*`
-- Tests: swap feliz, fee, sandwich/slippage, reservas insuficientes, dirección inválida
+- [x] Dirección X→Y / Y→X (`is_x`)
+- [x] Fee sobre input (estilo Uniswap v2, bps / 10_000)
+- [x] Invariante `(x+Δx)·(y−Δy) ≥ x·y`
+- [x] Slippage `min_amount_out` (exact-in)
+- [x] Math `u128` + `checked_*` en `amount_out_for_swap`
+- [x] Tests: X→Y, Y→X, fee vs 0, slippage, amount_in=0
 
 **Criterios de aceptación:**
-- Invariante `k` no disminuye tras fee
-- Solo `transfer_checked`
-- Cuentas duplicadas rechazadas
+- [x] `k` no disminuye tras el swap
+- [x] Solo `transfer_checked`
+- [x] Vaults / user ATAs distintos
 
 **Dependencias:** Fase 4  
 **Autorización requerida:** sí

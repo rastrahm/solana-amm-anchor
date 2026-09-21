@@ -123,6 +123,75 @@ pub fn amounts_for_withdraw(
     Ok((amount_x, amount_y))
 }
 
+/// Basis-points denominator for swap fees (`fee` is stored in bps on `Config`).
+pub const FEE_DENOMINATOR: u128 = 10_000;
+
+/// Exact-in constant-product swap output with fee applied on the input.
+///
+/// Uses Uniswap-v2 style math to limit precision loss:
+/// `amount_out = (amount_in * (10_000 - fee) * reserve_out)
+///             / (reserve_in * 10_000 + amount_in * (10_000 - fee))`
+///
+/// Also enforces the post-swap invariant
+/// `(reserve_in + amount_in) * (reserve_out - amount_out) >= reserve_in * reserve_out`.
+///
+/// @return `amount_out` of the token leaving the pool.
+pub fn amount_out_for_swap(
+    amount_in: u64,
+    reserve_in: u64,
+    reserve_out: u64,
+    fee_bps: u16,
+) -> Result<u64> {
+    require!(amount_in > 0, AmmError::InvalidAmount);
+    require!(reserve_in > 0 && reserve_out > 0, AmmError::InsufficientLiquidity);
+    require!(fee_bps as u128 <= FEE_DENOMINATOR, AmmError::InvalidFee);
+
+    let fee_multiplier = FEE_DENOMINATOR
+        .checked_sub(fee_bps as u128)
+        .ok_or(AmmError::MathOverflow)?;
+
+    let amount_in_u = amount_in as u128;
+    let reserve_in_u = reserve_in as u128;
+    let reserve_out_u = reserve_out as u128;
+
+    let amount_in_with_fee = amount_in_u
+        .checked_mul(fee_multiplier)
+        .ok_or(AmmError::MathOverflow)?;
+    let numerator = amount_in_with_fee
+        .checked_mul(reserve_out_u)
+        .ok_or(AmmError::MathOverflow)?;
+    let denominator = reserve_in_u
+        .checked_mul(FEE_DENOMINATOR)
+        .ok_or(AmmError::MathOverflow)?
+        .checked_add(amount_in_with_fee)
+        .ok_or(AmmError::MathOverflow)?;
+
+    let amount_out_u = numerator
+        .checked_div(denominator)
+        .ok_or(AmmError::MathOverflow)?;
+    require!(amount_out_u > 0, AmmError::InsufficientLiquidity);
+    require!(amount_out_u < reserve_out_u, AmmError::InsufficientLiquidity);
+
+    let amount_out = u64::try_from(amount_out_u).map_err(|_| error!(AmmError::MathOverflow))?;
+
+    // Invariant: k must not decrease after the full input is added to reserves.
+    let k_before = reserve_in_u
+        .checked_mul(reserve_out_u)
+        .ok_or(AmmError::MathOverflow)?;
+    let k_after = reserve_in_u
+        .checked_add(amount_in_u)
+        .ok_or(AmmError::MathOverflow)?
+        .checked_mul(
+            reserve_out_u
+                .checked_sub(amount_out_u)
+                .ok_or(AmmError::MathOverflow)?,
+        )
+        .ok_or(AmmError::MathOverflow)?;
+    require!(k_after >= k_before, AmmError::MathOverflow);
+
+    Ok(amount_out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,5 +248,26 @@ mod tests {
             amounts_for_withdraw(999_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
         assert_eq!(x, 999_000);
         assert_eq!(y, 999_000);
+    }
+
+    #[test]
+    fn swap_zero_fee_matches_constant_product() {
+        // amount_out = 1000 * 1000 / (1000 + 1000) = 500 with 0 fee? 
+        // formula: (1000 * 10000 * 1000) / (1000 * 10000 + 1000 * 10000) = 10_000_000_000 / 20_000_000 = 500
+        let out = amount_out_for_swap(1_000, 1_000, 1_000, 0).unwrap();
+        assert_eq!(out, 500);
+    }
+
+    #[test]
+    fn swap_with_fee_returns_less_than_zero_fee() {
+        let no_fee = amount_out_for_swap(10_000, 1_000_000, 1_000_000, 0).unwrap();
+        let with_fee = amount_out_for_swap(10_000, 1_000_000, 1_000_000, 30).unwrap();
+        assert!(with_fee < no_fee);
+        assert!(with_fee > 0);
+    }
+
+    #[test]
+    fn swap_rejects_empty_reserves() {
+        assert!(amount_out_for_swap(100, 0, 1_000, 30).is_err());
     }
 }
