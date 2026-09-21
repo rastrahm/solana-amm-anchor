@@ -80,6 +80,49 @@ pub fn lp_tokens_for_deposit(
     }
 }
 
+/// Token amounts returned when burning `lp_amount` shares.
+///
+/// Uses floor division (rounds in favor of the pool):
+/// `amount_* = lp_amount * reserve_* / total_lp`.
+///
+/// Ensures post-burn supply stays at least `MINIMUM_LIQUIDITY`.
+///
+/// @return `(amount_x, amount_y)`.
+pub fn amounts_for_withdraw(
+    lp_amount: u64,
+    reserve_x: u64,
+    reserve_y: u64,
+    total_lp: u64,
+) -> Result<(u64, u64)> {
+    require!(lp_amount > 0, AmmError::InvalidAmount);
+    require!(total_lp > 0 && reserve_x > 0 && reserve_y > 0, AmmError::InsufficientLiquidity);
+
+    let remaining = total_lp
+        .checked_sub(lp_amount)
+        .ok_or(AmmError::InsufficientLiquidity)?;
+    require!(
+        remaining >= MINIMUM_LIQUIDITY,
+        AmmError::InsufficientLiquidity
+    );
+
+    let amount_x = (lp_amount as u128)
+        .checked_mul(reserve_x as u128)
+        .ok_or(AmmError::MathOverflow)?
+        .checked_div(total_lp as u128)
+        .ok_or(AmmError::MathOverflow)?;
+    let amount_y = (lp_amount as u128)
+        .checked_mul(reserve_y as u128)
+        .ok_or(AmmError::MathOverflow)?
+        .checked_div(total_lp as u128)
+        .ok_or(AmmError::MathOverflow)?;
+
+    let amount_x = u64::try_from(amount_x).map_err(|_| error!(AmmError::MathOverflow))?;
+    let amount_y = u64::try_from(amount_y).map_err(|_| error!(AmmError::MathOverflow))?;
+    require!(amount_x > 0 && amount_y > 0, AmmError::InsufficientLiquidity);
+
+    Ok((amount_x, amount_y))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,5 +157,27 @@ mod tests {
             lp_tokens_for_deposit(500_000, 500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
         assert!(!lock);
         assert_eq!(user_lp, 500_000);
+    }
+
+    #[test]
+    fn withdraw_is_proportional_floor() {
+        let (x, y) =
+            amounts_for_withdraw(500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
+        assert_eq!(x, 500_000);
+        assert_eq!(y, 500_000);
+    }
+
+    #[test]
+    fn withdraw_rejects_burning_below_minimum_lock() {
+        // total 1_000_000, try burn 999_001 → remaining 999 < MINIMUM_LIQUIDITY
+        assert!(amounts_for_withdraw(999_001, 1_000_000, 1_000_000, 1_000_000).is_err());
+    }
+
+    #[test]
+    fn withdraw_allows_burning_all_user_lp_leaving_lock() {
+        let (x, y) =
+            amounts_for_withdraw(999_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
+        assert_eq!(x, 999_000);
+        assert_eq!(y, 999_000);
     }
 }

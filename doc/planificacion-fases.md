@@ -28,7 +28,7 @@ Autorizo Fase N — <nombre>
 | 1 | Estado `Config` + errores + layout | COMPLETADA | SÍ | SÍ |
 | 2 | Instrucción `initialize` | COMPLETADA | SÍ | SÍ |
 | 3 | Instrucción `deposit` (liquidez) | COMPLETADA | SÍ | SÍ |
-| 4 | Instrucción `withdraw` | PENDIENTE | NO | NO |
+| 4 | Instrucción `withdraw` | COMPLETADA | SÍ | SÍ |
 | 5 | Instrucción `swap` | PENDIENTE | NO | NO |
 | 6 | Suite de seguridad Sealevel | PENDIENTE | NO | NO |
 | 7 | Cliente / frontend Next.js | PENDIENTE | NO | NO |
@@ -139,15 +139,18 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** quemar LP y retirar X/Y de forma proporcional.
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
-- Burn de LP + `transfer_checked` desde vaults
-- `min_x` / `min_y` (slippage)
-- Prohibir retirar por debajo de la liquidez mínima bloqueada
-- Tests: withdraw feliz, slippage, LP insuficiente, pool vacío parcial
+- [x] `amounts_for_withdraw` (floor `lp · reserve / total_lp`)
+- [x] Burn LP + `transfer_checked` vault → user (Config firma con bump canónico)
+- [x] Slippage `min_x` / `min_y`
+- [x] Supply post-burn `>= MINIMUM_LIQUIDITY`
+- [x] Tests: feliz, slippage, LP insuficiente, no quemar el lock, retirar todo el LP del user
 
 **Criterios de aceptación:**
-- Invariante de proporción respetada (redondeo a favor del pool)
-- Signer y ownership verificados
+- [x] Redondeo a favor del pool
+- [x] Signer + ownership vía constraints ATA
 
 **Dependencias:** Fase 3  
 **Autorización requerida:** sí
