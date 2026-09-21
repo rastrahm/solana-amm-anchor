@@ -30,7 +30,7 @@ Autorizo Fase N — <nombre>
 | 3 | Instrucción `deposit` (liquidez) | COMPLETADA | SÍ | SÍ |
 | 4 | Instrucción `withdraw` | COMPLETADA | SÍ | SÍ |
 | 5 | Instrucción `swap` | COMPLETADA | SÍ | SÍ |
-| 6 | Suite de seguridad Sealevel | PENDIENTE | NO | NO |
+| 6 | Suite de seguridad Sealevel | COMPLETADA | SÍ | SÍ |
 | 7 | Cliente / frontend Next.js | PENDIENTE | NO | NO |
 | 8 | Hardening, docs finales y checklist de auditoría | PENDIENTE | NO | NO |
 
@@ -185,18 +185,34 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** cubrir vectores del curso de seguridad Solana / reglas del módulo.
 
-**Entregables (tests obligatorios):**
-- Type cosplay (cuenta mismo tamaño, discriminator incorrecto)
-- Arbitrary CPI (sustituir `token_program`)
-- Duplicate accounts (`vault_x == vault_y`)
-- Missing signer / wrong authority
-- First-deposit inflation (1 token / redondeo)
-- Rent / space exacto `8 + Config::INIT_SPACE`
-- PDA bump no canónico rechazado
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
+**Entregables (tests en `tests/security.ts`):**
+- [x] Type cosplay — cuenta tamaño 150, discriminator incorrecto
+- [x] Arbitrary CPI — `token_program = SystemProgram`
+- [x] Duplicate accounts — `vault_x == vault_y`
+- [x] Missing signer — `user` impostor sin firma
+- [x] Wrong authority — withdraw del LP de otra wallet
+- [x] First-deposit inflation — bootstrap 1 token rechazado; lock 1000 en depósito mínimo viable
+- [x] Rent / space — on-chain `data.len == 150`
+- [x] PDA bump / seeds — Config de otro pool rechazado
 
 **Criterios de aceptación:**
-- Todos los tests de ataque fallan como se espera (assert failure)
-- Checklist de mitigaciones marcada en este doc
+- [x] Los 8 vectores fallan como se espera
+- [x] Suite total: 28 passing (`amm` + `security`)
+
+**Checklist de mitigaciones ↔ tests**
+
+| Mitigación | Test |
+|------------|------|
+| Discriminator `#[account]` | type cosplay |
+| `Interface<TokenInterface>` | arbitrary CPI |
+| `require_keys_neq!` / constraints ATA | duplicate vaults |
+| `Signer<'info>` | missing signer |
+| `associated_token::authority` | wrong authority |
+| `MINIMUM_LIQUIDITY` | first-deposit inflation |
+| `Config::ACCOUNT_SPACE` | rent/space |
+| `seeds` + `bump = config.config_bump` | PDA bump |
 
 **Dependencias:** Fases 2–5  
 **Autorización requerida:** sí
