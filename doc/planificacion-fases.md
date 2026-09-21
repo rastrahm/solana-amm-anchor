@@ -26,7 +26,7 @@ Autorizo Fase N — <nombre>
 |------|--------|--------|------------|------------|
 | 0 | Scaffold del workspace | COMPLETADA | SÍ | SÍ |
 | 1 | Estado `Config` + errores + layout | COMPLETADA | SÍ | SÍ |
-| 2 | Instrucción `initialize` | PENDIENTE | NO | NO |
+| 2 | Instrucción `initialize` | COMPLETADA | SÍ | SÍ |
 | 3 | Instrucción `deposit` (liquidez) | PENDIENTE | NO | NO |
 | 4 | Instrucción `withdraw` | PENDIENTE | NO | NO |
 | 5 | Instrucción `swap` | PENDIENTE | NO | NO |
@@ -89,18 +89,21 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** crear el pool de forma atómica (PDAs + vaults + mint LP).
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
-- Accounts context con `init`, `seeds`, `bump`, `payer`, `space` explícitos
-- Vaults X/Y distintos (`require_keys_neq!`)
-- Mint LP con autoridad PDA
-- Fee en basis points validado
-- Authority opcional (`Option<Pubkey>`)
-- Tests: init feliz; doble init falla; mints/vaults inválidos fallan
+- [x] Accounts: `init` Config + mint LP; vaults ATA creados en handler tras validaciones
+- [x] Vaults / mints distintos (`require_keys_neq!` + chequeo de dirección ATA canónica)
+- [x] Mint LP con autoridad = Config PDA
+- [x] Fee `<= MAX_FEE_BPS`
+- [x] Authority opcional (`Option<Pubkey>`)
+- [x] Tests: init feliz; doble init; mints idénticos; fee inválido
 
 **Criterios de aceptación:**
-- Discriminador Anchor presente (anti type-cosplay)
-- Bumps guardados en `Config` (no recalcular desde el cliente en instrucciones posteriores)
-- `transfer_checked` / interfaces TokenInterface donde aplique
+- [x] Discriminador Anchor en Config (anti type-cosplay)
+- [x] Bumps `config_bump` / `lp_bump` persistidos
+- [x] `token_program: Interface<TokenInterface>` (anti arbitrary CPI)
+- [x] Espacio Config = 150 verificado on-chain
 
 **Dependencias:** Fase 1  
 **Autorización requerida:** sí
