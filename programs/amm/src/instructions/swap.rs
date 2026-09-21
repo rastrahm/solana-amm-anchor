@@ -81,7 +81,7 @@ pub struct Swap<'info> {
 /// @param amount_in Exact input amount transferred from the user.
 /// @param min_amount_out Slippage guard on the output amount.
 /// @return Result<()> Ok when both transfers succeed.
-pub fn handler(
+pub(crate) fn handler(
     ctx: Context<Swap>,
     is_x: bool,
     amount_in: u64,
@@ -112,11 +112,7 @@ pub fn handler(
 
     let seed_bytes = ctx.accounts.config.seed.to_le_bytes();
     let bump = [ctx.accounts.config.config_bump];
-    let signer_seeds: &[&[&[u8]]] = &[&[
-        CONFIG_SEED,
-        seed_bytes.as_ref(),
-        bump.as_ref(),
-    ]];
+    let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, seed_bytes.as_ref(), bump.as_ref()]];
 
     if is_x {
         // User sends X, receives Y.

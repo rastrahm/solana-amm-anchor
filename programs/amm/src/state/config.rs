@@ -59,7 +59,8 @@ mod tests {
     #[test]
     fn config_init_space_matches_manual_layout() {
         assert_eq!(
-            Config::INIT_SPACE, EXPECTED_INIT_SPACE,
+            Config::INIT_SPACE,
+            EXPECTED_INIT_SPACE,
             "InitSpace diverged from the documented size-descending layout"
         );
     }

@@ -119,7 +119,7 @@ pub struct Deposit<'info> {
 /// @param amount_y Exact amount of token Y to transfer from the user.
 /// @param min_lp Slippage guard: minimum LP tokens the user must receive.
 /// @return Result<()> Ok when transfers and mints succeed.
-pub fn handler(
+pub(crate) fn handler(
     ctx: Context<Deposit>,
     amount_x: u64,
     amount_y: u64,
@@ -172,11 +172,7 @@ pub fn handler(
 
     let seed_bytes = ctx.accounts.config.seed.to_le_bytes();
     let bump = [ctx.accounts.config.config_bump];
-    let signer_seeds: &[&[&[u8]]] = &[&[
-        CONFIG_SEED,
-        seed_bytes.as_ref(),
-        bump.as_ref(),
-    ]];
+    let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, seed_bytes.as_ref(), bump.as_ref()]];
 
     if lock_minimum {
         mint_to(

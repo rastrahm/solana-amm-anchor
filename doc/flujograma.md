@@ -10,16 +10,19 @@ Flujogramas de decisión por instrucción (control de errores, validaciones Seal
 flowchart TD
     A([Inicio initialize]) --> B{¿Initializer es Signer?}
     B -->|no| E1[/Error: Missing signer/]
-    B -->|sí| C{¿mint_x ≠ mint_y / vaults distintos?}
-    C -->|no| E2[/AmmError::IdenticalVaults/]
+    B -->|sí| C{¿mint_x ≠ mint_y?}
+    C -->|no| E2[/AmmError::IdenticalMints/]
     C -->|sí| D{¿fee_bps en rango válido?}
     D -->|no| E3[/AmmError::InvalidFee/]
-    D -->|sí| F[init Config PDA space = 8 + INIT_SPACE]
-    F --> G[init Vault X y Vault Y authority = Config]
-    G --> H[init Mint LP mint_authority = Config]
-    H --> I[Guardar bumps canónicos + authority + fee]
-    I --> J([Ok])
+    D -->|sí| F[init Config PDA space = ACCOUNT_SPACE 150]
+    F --> G[init Mint LP mint_authority = Config]
+    G --> H[Crear vault ATAs X/Y authority = Config]
+    H --> I{¿vault_x ≠ vault_y?}
+    I -->|no| E4[/AmmError::IdenticalVaults/]
+    I -->|sí| J[Guardar bumps canónicos + authority + fee]
+    J --> K([Ok])
 ```
+
 
 ---
 

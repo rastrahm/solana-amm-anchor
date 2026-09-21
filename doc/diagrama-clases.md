@@ -54,6 +54,7 @@ classDiagram
         +InterfaceAccount vault_x
         +InterfaceAccount vault_y
         +Interface token_program
+        +Program associated_token_program
         +Program system_program
     }
 
