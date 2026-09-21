@@ -8,6 +8,7 @@ import { AmountField, StatusBanner, onFormSubmit } from "@/components/pool/FormB
 import { useAmmProgram } from "@/hooks/useAmmProgram";
 import { derivePoolPdas, toBn } from "@/lib/amm/pdas";
 import { swapSchema } from "@/schemas/pool";
+import { useI18n } from "@/lib/i18n/I18nProvider";
 
 export type SwapPanelProps = {
   mintX: string;
@@ -21,6 +22,7 @@ export type SwapPanelProps = {
  * @returns Swap panel.
  */
 export function SwapPanel({ mintX, mintY }: SwapPanelProps) {
+  const { t } = useI18n();
   const program = useAmmProgram();
   const { publicKey } = useWallet();
   const [seed, setSeed] = useState("1");
@@ -34,7 +36,7 @@ export function SwapPanel({ mintX, mintY }: SwapPanelProps) {
     setError(null);
     setStatus(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first");
+      setError(t.connectWalletFirst);
       return;
     }
     const parsed = swapSchema.safeParse({
@@ -44,7 +46,7 @@ export function SwapPanel({ mintX, mintY }: SwapPanelProps) {
       minAmountOut: minOut,
     });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid input");
+      setError(parsed.error.issues[0]?.message ?? t.invalidInput);
       return;
     }
 
@@ -67,28 +69,28 @@ export function SwapPanel({ mintX, mintY }: SwapPanelProps) {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
-      setStatus(`Swapped · tx ${sig.slice(0, 8)}…`);
+      setStatus(t.swapped(sig.slice(0, 8)));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Swap failed");
+      setError(err instanceof Error ? err.message : t.swapFailed);
     }
   }
 
   return (
     <section className="panel" aria-labelledby="swap-heading">
-      <h2 id="swap-heading">Swap</h2>
+      <h2 id="swap-heading">{t.swapTitle}</h2>
       <form onSubmit={(event) => onFormSubmit(event, submit)}>
-        <AmountField id="sw-seed" label="Seed" value={seed} onChange={setSeed} />
+        <AmountField id="sw-seed" label={t.seed} value={seed} onChange={setSeed} />
         <fieldset className="direction">
-          <legend>Direction</legend>
+          <legend>{t.direction}</legend>
           <label>
             <input
               type="radio"
               name="direction"
               checked={isX}
               onChange={() => setIsX(true)}
-              aria-label="Swap X to Y"
+              aria-label={t.swapXy}
             />
-            X → Y
+            {t.swapXy}
           </label>
           <label>
             <input
@@ -96,14 +98,14 @@ export function SwapPanel({ mintX, mintY }: SwapPanelProps) {
               name="direction"
               checked={!isX}
               onChange={() => setIsX(false)}
-              aria-label="Swap Y to X"
+              aria-label={t.swapYx}
             />
-            Y → X
+            {t.swapYx}
           </label>
         </fieldset>
-        <AmountField id="sw-in" label="Amount in" value={amountIn} onChange={setAmountIn} />
-        <AmountField id="sw-min-out" label="Min out" value={minOut} onChange={setMinOut} />
-        <button type="submit">Swap</button>
+        <AmountField id="sw-in" label={t.amountIn} value={amountIn} onChange={setAmountIn} />
+        <AmountField id="sw-min-out" label={t.minOut} value={minOut} onChange={setMinOut} />
+        <button type="submit">{t.actionSwap}</button>
       </form>
       <StatusBanner message={status} />
       <StatusBanner message={error} tone="error" />
