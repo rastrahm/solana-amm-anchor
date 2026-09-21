@@ -24,7 +24,7 @@ Autorizo Fase N — <nombre>
 
 | Fase | Nombre | Estado | Autorizada | Completada |
 |------|--------|--------|------------|------------|
-| 0 | Scaffold del workspace | PENDIENTE | NO | NO |
+| 0 | Scaffold del workspace | COMPLETADA | SÍ | SÍ |
 | 1 | Estado `Config` + errores + layout | PENDIENTE | NO | NO |
 | 2 | Instrucción `initialize` | PENDIENTE | NO | NO |
 | 3 | Instrucción `deposit` (liquidez) | PENDIENTE | NO | NO |
@@ -40,16 +40,22 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** dejar el repo compilable con Anchor, keys locales ignoradas y estructura modular.
 
+**Estado:** COMPLETADA (autorizada 2026-09-21)
+
 **Entregables:**
 - `Anchor.toml`, `Cargo.toml` (workspace), programa en `programs/amm/`
-- `declare_id!` alineado con keypair de despliegue local
+- `declare_id!` alineado con keypair de despliegue local (`DR4UwHAVE9tVSm1kJo89ZiV6Dk1SXVPCPAhg67LT99mD`)
 - Carpetas: `state/`, `instructions/`, `errors/`, `tests/`
 - Scripts `anchor build` / `anchor test` verdes (smoke)
 
 **Criterios de aceptación:**
-- `anchor build` OK
-- Estructura de módulos documentada en `lib.rs`
-- Sin secretos ni keypairs en git
+- [x] `anchor build` OK
+- [x] Estructura de módulos documentada en `lib.rs`
+- [x] Sin secretos ni keypairs en git (`.gitignore` + keypair solo en `target/deploy/`)
+
+**Notas de entorno:**
+- Node `>=20.18` (ver `.nvmrc`)
+- `[workspace.metadata.solana] tools-version = "v1.52"` para evitar fallos de `edition2024` con platform-tools v1.48
 
 **Dependencias:** ninguna  
 **Autorización requerida:** sí
