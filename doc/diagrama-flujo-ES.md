@@ -1,5 +1,7 @@
 # Diagrama de flujo — solana-amm-anchor
 
+> 🇬🇧 [English version](diagrama-flujo-EN.md) · [Índice](../README.md)
+
 Flujo de datos y componentes entre usuario, cliente, runtime Solana y cuentas del AMM.
 
 ```mermaid

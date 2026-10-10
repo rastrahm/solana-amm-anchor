@@ -1,5 +1,7 @@
 # Planificación por fases — solana-amm-anchor
 
+> 🇬🇧 [English version](planificacion-fases-EN.md) · [Índice](../README.md)
+
 AMM de producto constante (`x · y = k`) en Solana con Anchor 0.30+, Rust BPF/SBF y `token_interface` (SPL Token / Token-2022).
 
 ## Reglas de gobernanza
@@ -32,7 +34,7 @@ Autorizo Fase N — <nombre>
 | 5 | Instrucción `swap` | COMPLETADA | SÍ | SÍ |
 | 6 | Suite de seguridad Sealevel | COMPLETADA | SÍ | SÍ |
 | 7 | Cliente / frontend Next.js | COMPLETADA | SÍ | SÍ |
-| 8 | Hardening, docs finales y checklist de auditoría | PENDIENTE | NO | NO |
+| 8 | Hardening, docs finales y checklist de auditoría | COMPLETADA | SÍ | SÍ |
 
 ---
 
@@ -250,23 +252,24 @@ Autorizo Fase N — <nombre>
 
 **Objetivo:** cierre de calidad producción-ready.
 
-**Estado:** COMPLETADA (autorizada 2026-09-21) — pendiente visto bueno humano de cierre
+**Estado:** COMPLETADA Y APROBADA (autorizada 2026-09-21; visto bueno 2026-09-22)
 
 **Entregables:**
 - [x] Clippy + rustfmt limpios (`handlers` `pub(crate)` para evitar glob ambiguo)
-- [x] Revisión cualitativa de compute units (`doc/auditoria.md` §3)
+- [x] Revisión cualitativa de compute units (`doc/auditoria-ES.md` §3)
 - [x] README raíz (build, test, deploy local)
 - [x] Diagramas alineados con init (mint LP → vaults ATA)
-- [x] Matriz final de mitigaciones vs tests (`doc/auditoria.md`)
+- [x] Matriz final de mitigaciones vs tests (`doc/auditoria-ES.md`)
 
 **Criterios de aceptación:**
 - [x] `cargo fmt` / `cargo clippy -D warnings` OK
 - [x] `anchor test` verde (28 passing)
 - [x] Sin TODOs de seguridad abiertos en `programs/`
-- [ ] Visto bueno de cierre
+- [x] Visto bueno de cierre (demo localnet: init / deposit verificados)
 
 **Dependencias:** Fase 6 (y 7 si se autorizó)  
 **Autorización requerida:** sí
+
 ---
 
 ## Orden de trabajo sugerido (resumen)

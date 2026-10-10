@@ -1,5 +1,7 @@
 # Checklist de auditoría — solana-amm-anchor
 
+> 🇬🇧 [English version](auditoria-EN.md) · [Índice](../README.md)
+
 Matriz final (Fase 8) de mitigaciones Sealevel / curso de seguridad Solana ↔ implementación ↔ tests.
 
 **Programa:** `programs/amm` · **Suite:** `tests/amm.ts` + `tests/security.ts` (28 passing) · **Lint:** `cargo fmt` + `cargo clippy -D warnings`
@@ -70,6 +72,6 @@ Recomendación operativa: medir con `getTransaction` / logs del validator tras `
 - [x] README raíz + diagramas alineados
 - [x] Esta matriz de auditoría
 - [x] `anchor test` verde (28 passing)
-- [ ] Visto bueno humano de cierre
+- [x] Visto bueno humano de cierre (2026-09-22)
 
 **Sin TODOs de seguridad pendientes en el árbol del programa.**
