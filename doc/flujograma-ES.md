@@ -1,5 +1,7 @@
 # Flujograma — solana-amm-anchor
 
+> 🇬🇧 [English version](flujograma-EN.md) · [Índice](../README.md)
+
 Flujogramas de decisión por instrucción (control de errores, validaciones Sealevel y math).
 
 ---

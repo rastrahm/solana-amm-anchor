@@ -1,6 +1,8 @@
-# Diagrama de clases — solana-amm-anchor
+# Class diagram — solana-amm-anchor
 
-Modelo estático del programa AMM (Anchor). Representa cuentas de estado, contextos de instrucción, errores y relaciones con interfaces SPL.
+> 🇪🇸 [Versión en español](diagrama-clases-ES.md) · [Index](../README.md)
+
+Static model of the AMM program (Anchor). It shows state accounts, instruction contexts, errors, and relationships with the SPL interfaces.
 
 ```mermaid
 classDiagram
@@ -120,28 +122,28 @@ classDiagram
         burn()
     }
 
-    AmmProgram --> Initialize : usa
-    AmmProgram --> Deposit : usa
-    AmmProgram --> Withdraw : usa
-    AmmProgram --> Swap : usa
-    AmmProgram --> AmmError : lanza
+    AmmProgram --> Initialize : uses
+    AmmProgram --> Deposit : uses
+    AmmProgram --> Withdraw : uses
+    AmmProgram --> Swap : uses
+    AmmProgram --> AmmError : throws
 
     Initialize --> Config : init
     Initialize --> VaultX : init
     Initialize --> VaultY : init
     Initialize --> MintLp : init
 
-    Deposit --> Config : lee bumps/fee
+    Deposit --> Config : reads bumps/fee
     Deposit --> VaultX : transfer in
     Deposit --> VaultY : transfer in
     Deposit --> MintLp : mint LP
 
-    Withdraw --> Config : lee bumps
+    Withdraw --> Config : reads bumps
     Withdraw --> VaultX : transfer out
     Withdraw --> VaultY : transfer out
     Withdraw --> MintLp : burn LP
 
-    Swap --> Config : lee fee/bumps
+    Swap --> Config : reads fee/bumps
     Swap --> VaultX : in/out
     Swap --> VaultY : in/out
 
@@ -150,16 +152,16 @@ classDiagram
     Withdraw ..> TokenInterface : CPI
     Swap ..> TokenInterface : CPI
 
-    note for Config "Orden de campos por tamaño\nOption Pubkey → Pubkey → u64 → u16 → u8\nBump canónico persistido"
+    note for Config "Fields ordered by size\nOption Pubkey → Pubkey → u64 → u16 → u8\nCanonical bump persisted"
 ```
 
-## Notas de diseño
+## Design notes
 
-| Elemento | Regla |
-|----------|--------|
-| `Config` | `#[account]` + discriminator 8 bytes; anti type-cosplay |
-| Espacio | Exactamente `8 + Config::INIT_SPACE` |
-| Vaults | Claves distintas; authority = PDA `Config` |
-| LP | Primer depósito bloquea liquidez mínima |
-| Tokens | Solo `token_interface` + `transfer_checked` |
-| Math | Constant product; fee sobre input; `u128` + `checked_*` |
+| Element | Rule |
+|---------|------|
+| `Config` | `#[account]` + 8-byte discriminator; anti type-cosplay |
+| Space | Exactly `8 + Config::INIT_SPACE` |
+| Vaults | Distinct keys; authority = `Config` PDA |
+| LP | First deposit locks minimum liquidity |
+| Tokens | Only `token_interface` + `transfer_checked` |
+| Math | Constant product; fee on input; `u128` + `checked_*` |

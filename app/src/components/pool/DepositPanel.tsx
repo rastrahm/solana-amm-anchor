@@ -30,8 +30,9 @@ export function DepositPanel({ mintX, mintY }: DepositPanelProps) {
   const program = useAmmProgram();
   const { publicKey } = useWallet();
   const [seed, setSeed] = useState("1");
-  const [amountX, setAmountX] = useState("1000000");
-  const [amountY, setAmountY] = useState("1000000");
+  // Raw token units (6 decimals in the demo). First deposit needs √(x·y) > 1000.
+  const [amountX, setAmountX] = useState("100000");
+  const [amountY, setAmountY] = useState("100000");
   const [minLp, setMinLp] = useState("0");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

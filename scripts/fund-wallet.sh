@@ -5,8 +5,8 @@ set -eu
 
 PUBKEY="${1:?Usage: $0 <PUBKEY>}"
 RPC="${RPC_URL:-http://127.0.0.1:8899}"
-MINT_X="${MINT_X:-CLQrA2R3g3hQHX4ARLmnrZYHCsUGrQ1f25yTCjAUPdn1}"
-MINT_Y="${MINT_Y:-3Ffkjmd8jGDkC1naMevP9vhV44LWJqT9B6s4EU8yTmC9}"
+MINT_X="${MINT_X:-2bLvSSNZTD8GQ1MJiw2U6rW9cbNR7C6qrjLLVxszGLSZ}"
+MINT_Y="${MINT_Y:-AovraHMmHYj24vPYJiVjhFzYjg1FcWpTLb9RgqxK6g23}"
 
 solana config set --url "$RPC" >/dev/null
 solana airdrop 10 "$PUBKEY" >/dev/null
