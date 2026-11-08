@@ -36,6 +36,7 @@ Autorizo Fase N — <nombre>
 | 7 | Cliente / frontend Next.js | COMPLETADA | SÍ | SÍ |
 | 8 | Hardening, docs finales y checklist de auditoría | COMPLETADA | SÍ | SÍ |
 | 9 | Hardening de seguridad post-auditoría | COMPLETADA (pendiente de visto bueno) | SÍ | SÍ |
+| 10 | Eventos on-chain (`emit_cpi!`) | COMPLETADA (pendiente de visto bueno) | SÍ | SÍ |
 
 ---
 
@@ -305,10 +306,35 @@ Autorizo Fase N — <nombre>
 
 ---
 
+## Fase 10 — Eventos on-chain (`emit_cpi!`)
+
+**Objetivo:** que indexadores, gráficos de precio y auditores puedan seguir la actividad del pool sin parsear logs de texto.
+
+**Estado:** COMPLETADA, pendiente de visto bueno (autorizada 2026-11-08)
+
+**Entregables (TDD: tests en rojo contra el programa sin eventos → implementación → verde):**
+- [x] Feature `event-cpi` de `anchor-lang`; `#[event_cpi]` en `Initialize`, `Deposit`, `Withdraw`, `Swap` y `UpdateConfig` (agrega las cuentas `event_authority` y `program`, que el cliente resuelve solo vía IDL)
+- [x] `events.rs`: `PoolInitialized`, `LiquidityDeposited`, `LiquidityWithdrawn`, `SwapExecuted`, `LockedUpdated`, `AuthorityUpdated` (campos en orden de tamaño descendente)
+- [x] Deposit/withdraw/swap informan montos movidos y reservas posteriores (calculadas con `checked_*`)
+- [x] Tests: un evento por instrucción con los valores verificados contra los saldos on-chain; llamada directa a la instrucción de eventos sin firma de la PDA → `ConstraintSigner` (no se pueden falsificar)
+- [x] IDL copiado a la app; documentación ES/EN (README, auditoría §1/§3/§8, diagrama de clases)
+
+**Criterios de aceptación:**
+- [x] `anchor test` verde (43 passing)
+- [x] `cargo test -p amm` (22 tests) · `cargo clippy` sin warnings · `cargo fmt --check`
+- [x] App: `tsc --noEmit` + Vitest (14 tests)
+
+**Coste medido:** ≈ 5–12k compute units extra por instrucción (self-CPI + derivación de la PDA `__event_authority`).
+
+**Dependencias:** Fase 9  
+**Autorización requerida:** sí (otorgada en el chat)
+
+---
+
 ## Orden de trabajo sugerido (resumen)
 
 ```text
-Fase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 opcional] → 8 → 9
+Fase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 opcional] → 8 → 9 → 10
          ↑
    autorizar una a una
 ```

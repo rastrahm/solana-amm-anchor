@@ -21,9 +21,11 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { AssertionError, expect } from "chai";
+import { createHash } from "crypto";
 import { Amm } from "../target/types/amm";
 
 const CONFIG_ACCOUNT_SPACE = 150;
@@ -184,7 +186,7 @@ describe("phase6: sealevel security", () => {
       tokenProgram
     );
 
-    await program.methods
+    const signature = await program.methods
       .initialize(seed, fee, authority)
       .accountsPartial({
         initializer: wallet.publicKey,
@@ -200,7 +202,7 @@ describe("phase6: sealevel security", () => {
       })
       .rpc();
 
-    return { config, mintLp, vaultX, vaultY };
+    return { signature, config, mintLp, vaultX, vaultY };
   }
 
   async function fundUser(
@@ -1144,5 +1146,209 @@ describe("phase6: sealevel security", () => {
           .rpc(),
       /IdenticalVaults/
     );
+  });
+
+  describe("events (emit_cpi)", () => {
+    // `EVENT_IX_TAG_LE`: the hash prefix is read as a big-endian u64 and serialized little-endian.
+    const EVENT_IX_TAG = Buffer.from(
+      createHash("sha256").update("anchor:event").digest().subarray(0, 8)
+    ).reverse();
+
+    type DecodedEvent = { name: string; data: Record<string, any> };
+
+    /** Decodes the `emit_cpi!` events of a transaction (self-CPI inner instructions). */
+    async function eventsOf(signature: string): Promise<DecodedEvent[]> {
+      const latest = await connection.getLatestBlockhash();
+      await connection.confirmTransaction(
+        { signature, ...latest },
+        "confirmed"
+      );
+      const tx = await connection.getTransaction(signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      const keys = tx!.transaction.message.staticAccountKeys;
+      const events: DecodedEvent[] = [];
+      for (const inner of tx!.meta!.innerInstructions ?? []) {
+        for (const ix of inner.instructions) {
+          if (!keys[ix.programIdIndex].equals(program.programId)) continue;
+          const data = Buffer.from(anchor.utils.bytes.bs58.decode(ix.data));
+          if (!data.subarray(0, 8).equals(EVENT_IX_TAG)) continue;
+          const event = program.coder.events.decode(
+            anchor.utils.bytes.base64.encode(data.subarray(8))
+          );
+          if (event) events.push(event as DecodedEvent);
+        }
+      }
+      return events;
+    }
+
+    function single(events: DecodedEvent[], name: string) {
+      const matching = events.filter((e) => e.name === name);
+      expect(
+        matching,
+        `${name} in [${events.map((e) => e.name).join(", ")}]`
+      ).to.have.length(1);
+      return matching[0].data;
+    }
+
+    it("initialize emits PoolInitialized with the stored pool parameters", async () => {
+      const seed = new BN(630);
+      const [mintX, mintY] = await createPairMints();
+      const { signature, config, mintLp } = await initializePool(
+        seed,
+        mintX,
+        mintY,
+        25,
+        TOKEN_PROGRAM_ID,
+        wallet.publicKey
+      );
+
+      const ev = single(await eventsOf(signature), "poolInitialized");
+      expect(ev.authority.equals(wallet.publicKey)).to.equal(true);
+      expect(ev.config.equals(config)).to.equal(true);
+      expect(ev.mintX.equals(mintX)).to.equal(true);
+      expect(ev.mintY.equals(mintY)).to.equal(true);
+      expect(ev.mintLp.equals(mintLp)).to.equal(true);
+      expect(ev.seed.toString()).to.equal("630");
+      expect(ev.fee).to.equal(25);
+    });
+
+    it("deposit, swap and withdraw emit the moved amounts and post-operation reserves", async () => {
+      const seed = new BN(631);
+      const [mintX, mintY] = await createPairMints();
+      const { config, mintLp, vaultX, vaultY } = await initializePool(
+        seed,
+        mintX,
+        mintY
+      );
+      const { userX, userY } = await fundUser(mintX, mintY, 3_000_000n);
+      const userLp = getAssociatedTokenAddressSync(
+        mintLp,
+        wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      const reserves = async (): Promise<[bigint, bigint]> => [
+        (await getAccount(connection, vaultX)).amount,
+        (await getAccount(connection, vaultY)).amount,
+      ];
+      const expectPoolEvent = (ev: Record<string, any>, [x, y]: bigint[]) => {
+        expect(ev.config.equals(config)).to.equal(true);
+        expect(ev.user.equals(wallet.publicKey)).to.equal(true);
+        expect(ev.reserveX.toString()).to.equal(x.toString());
+        expect(ev.reserveY.toString()).to.equal(y.toString());
+      };
+
+      const depositSig = await deposit(
+        seed,
+        mintX,
+        mintY,
+        new BN(1_000_000),
+        new BN(1_000_000 - MINIMUM_LIQUIDITY)
+      );
+      const [x1, y1] = await reserves();
+      const dep = single(await eventsOf(depositSig), "liquidityDeposited");
+      expectPoolEvent(dep, [x1, y1]);
+      expect(dep.amountX.toNumber()).to.equal(1_000_000);
+      expect(dep.amountY.toNumber()).to.equal(1_000_000);
+      expect(dep.lpMinted.toNumber()).to.equal(1_000_000 - MINIMUM_LIQUIDITY);
+      expect(dep.lpLocked.toNumber()).to.equal(MINIMUM_LIQUIDITY);
+
+      const swapSig = await program.methods
+        .swap(true, new BN(10_000), new BN(0))
+        .accountsPartial({
+          user: wallet.publicKey,
+          mintX,
+          mintY,
+          config,
+          vaultX,
+          vaultY,
+          userX,
+          userY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      const [x2, y2] = await reserves();
+      const sw = single(await eventsOf(swapSig), "swapExecuted");
+      expectPoolEvent(sw, [x2, y2]);
+      expect(sw.isX).to.equal(true);
+      expect(sw.amountIn.toString()).to.equal((x2 - x1).toString());
+      expect(sw.amountOut.toString()).to.equal((y1 - y2).toString());
+
+      const withdrawSig = await program.methods
+        .withdraw(new BN(100_000), new BN(1), new BN(1))
+        .accountsPartial({
+          user: wallet.publicKey,
+          mintX,
+          mintY,
+          mintLp,
+          config,
+          vaultX,
+          vaultY,
+          userX,
+          userY,
+          userLp,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      const [x3, y3] = await reserves();
+      const wd = single(await eventsOf(withdrawSig), "liquidityWithdrawn");
+      expectPoolEvent(wd, [x3, y3]);
+      expect(wd.lpBurned.toNumber()).to.equal(100_000);
+      expect(wd.amountX.toString()).to.equal((x2 - x3).toString());
+      expect(wd.amountY.toString()).to.equal((y2 - y3).toString());
+    });
+
+    it("admin changes emit LockedUpdated and AuthorityUpdated", async () => {
+      const [mintX, mintY] = await createPairMints();
+      const { config } = await initializePool(
+        new BN(632),
+        mintX,
+        mintY,
+        30,
+        TOKEN_PROGRAM_ID,
+        wallet.publicKey
+      );
+
+      const locked = single(
+        await eventsOf(await setLocked(config, true)),
+        "lockedUpdated"
+      );
+      expect(locked.config.equals(config)).to.equal(true);
+      expect(locked.authority.equals(wallet.publicKey)).to.equal(true);
+      expect(locked.locked).to.equal(true);
+
+      const nextAdmin = Keypair.generate().publicKey;
+      const transferred = single(
+        await eventsOf(await setAuthority(config, nextAdmin)),
+        "authorityUpdated"
+      );
+      expect(transferred.config.equals(config)).to.equal(true);
+      expect(transferred.previousAuthority.equals(wallet.publicKey)).to.equal(
+        true
+      );
+      expect(transferred.newAuthority.equals(nextAdmin)).to.equal(true);
+    });
+
+    it("events cannot be forged: a direct call to the event instruction is rejected", async () => {
+      const [eventAuthority] = PublicKey.findProgramAddressSync(
+        [Buffer.from("__event_authority")],
+        program.programId
+      );
+      const forged = new TransactionInstruction({
+        programId: program.programId,
+        keys: [{ pubkey: eventAuthority, isSigner: false, isWritable: false }],
+        data: Buffer.concat([EVENT_IX_TAG, Buffer.alloc(8)]),
+      });
+
+      await expectError(
+        () =>
+          sendAndConfirmTransaction(connection, new Transaction().add(forged), [
+            wallet.payer,
+          ]),
+        /ConstraintSigner|0x7d2/
+      );
+    });
   });
 });

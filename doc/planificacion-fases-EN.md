@@ -36,6 +36,7 @@ I authorize Phase N — <name>
 | 7 | Next.js client / frontend | COMPLETED | YES | YES |
 | 8 | Hardening, final docs, and audit checklist | COMPLETED | YES | YES |
 | 9 | Post-audit security hardening | COMPLETED (pending sign-off) | YES | YES |
+| 10 | On-chain events (`emit_cpi!`) | COMPLETED (pending sign-off) | YES | YES |
 
 ---
 
@@ -305,10 +306,35 @@ I authorize Phase N — <name>
 
 ---
 
+## Phase 10 — On-chain events (`emit_cpi!`)
+
+**Goal:** let indexers, price charts and auditors follow pool activity without parsing text logs.
+
+**Status:** COMPLETED, pending sign-off (authorized 2026-11-08)
+
+**Deliverables (TDD: red tests against the program without events → implementation → green):**
+- [x] `anchor-lang` `event-cpi` feature; `#[event_cpi]` on `Initialize`, `Deposit`, `Withdraw`, `Swap` and `UpdateConfig` (adds the `event_authority` and `program` accounts, which the client resolves from the IDL)
+- [x] `events.rs`: `PoolInitialized`, `LiquidityDeposited`, `LiquidityWithdrawn`, `SwapExecuted`, `LockedUpdated`, `AuthorityUpdated` (fields in descending size order)
+- [x] Deposit/withdraw/swap report the moved amounts and post-operation reserves (computed with `checked_*`)
+- [x] Tests: one event per instruction with values checked against on-chain balances; a direct call to the event instruction without the PDA signature → `ConstraintSigner` (events cannot be forged)
+- [x] IDL copied to the app; ES/EN docs (README, audit §1/§3/§8, class diagram)
+
+**Acceptance criteria:**
+- [x] `anchor test` green (43 passing)
+- [x] `cargo test -p amm` (22 tests) · `cargo clippy` with no warnings · `cargo fmt --check`
+- [x] App: `tsc --noEmit` + Vitest (14 tests)
+
+**Measured cost:** ≈ 5–12k extra compute units per instruction (self-CPI + deriving the `__event_authority` PDA).
+
+**Dependencies:** Phase 9  
+**Authorization required:** yes (granted in chat)
+
+---
+
 ## Suggested work order (summary)
 
 ```text
-Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 optional] → 8 → 9
+Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 optional] → 8 → 9 → 10
           ↑
    authorize one at a time
 ```

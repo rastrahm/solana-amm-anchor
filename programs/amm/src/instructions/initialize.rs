@@ -7,6 +7,7 @@ use anchor_spl::{
 };
 
 use crate::errors::AmmError;
+use crate::events::PoolInitialized;
 use crate::helpers::ensure_supported_mint;
 use crate::state::{Config, CONFIG_SEED, LP_SEED, MAX_FEE_BPS};
 
@@ -15,6 +16,7 @@ use crate::state::{Config, CONFIG_SEED, LP_SEED, MAX_FEE_BPS};
 /// Creates the `Config` PDA and LP mint in-constraints, then creates vault ATAs
 /// in the handler **after** mint/fee checks (so invalid inputs never spend CPI
 /// on vault creation and surface `AmmError` cleanly).
+#[event_cpi]
 #[derive(Accounts)]
 #[instruction(seed: u64)]
 pub struct Initialize<'info> {
@@ -146,6 +148,16 @@ pub(crate) fn handler(
     config.locked = false;
     config.config_bump = ctx.bumps.config;
     config.lp_bump = ctx.bumps.mint_lp;
+
+    emit_cpi!(PoolInitialized {
+        authority,
+        config: ctx.accounts.config.key(),
+        mint_x: ctx.accounts.mint_x.key(),
+        mint_y: ctx.accounts.mint_y.key(),
+        mint_lp: ctx.accounts.mint_lp.key(),
+        seed,
+        fee,
+    });
 
     Ok(())
 }

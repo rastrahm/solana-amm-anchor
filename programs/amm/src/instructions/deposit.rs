@@ -9,12 +9,14 @@ use anchor_spl::{
 };
 
 use crate::errors::AmmError;
+use crate::events::LiquidityDeposited;
 use crate::helpers::{deposit_quote, MINIMUM_LIQUIDITY};
 use crate::state::{Config, CONFIG_SEED, LP_SEED};
 
 /// Accounts for depositing token X/Y and minting LP.
 ///
 /// Large token accounts are `Box`ed to stay under the BPF 4KB stack limit.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct Deposit<'info> {
     /// Liquidity provider funding the deposit and paying ATA rent if needed.
@@ -196,6 +198,25 @@ pub(crate) fn handler(ctx: Context<Deposit>, max_x: u64, max_y: u64, min_lp: u64
         ),
         quote.lp_to_user,
     )?;
+
+    emit_cpi!(LiquidityDeposited {
+        config: ctx.accounts.config.key(),
+        user: ctx.accounts.user.key(),
+        amount_x: quote.amount_x,
+        amount_y: quote.amount_y,
+        lp_minted: quote.lp_to_user,
+        lp_locked: if quote.lock_minimum {
+            MINIMUM_LIQUIDITY
+        } else {
+            0
+        },
+        reserve_x: reserve_x
+            .checked_add(quote.amount_x)
+            .ok_or(AmmError::MathOverflow)?,
+        reserve_y: reserve_y
+            .checked_add(quote.amount_y)
+            .ok_or(AmmError::MathOverflow)?,
+    });
 
     Ok(())
 }

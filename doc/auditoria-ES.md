@@ -4,7 +4,7 @@
 
 Matriz final (Fase 8) de mitigaciones Sealevel / curso de seguridad Solana ↔ implementación ↔ tests.
 
-**Programa:** `programs/amm` · **Suite:** `tests/amm.ts` + `tests/security.ts` (39 passing) · **Lint:** `cargo fmt` + `cargo clippy -D warnings`
+**Programa:** `programs/amm` · **Suite:** `tests/amm.ts` + `tests/security.ts` (43 passing) · **Lint:** `cargo fmt` + `cargo clippy -D warnings`
 
 ---
 
@@ -33,6 +33,7 @@ Matriz final (Fase 8) de mitigaciones Sealevel / curso de seguridad Solana ↔ i
 | Fee inválido | `fee <= MAX_FEE_BPS` | initialize | amm: invalid fee |
 | `transfer` inseguro | Solo `transfer_checked` + decimals | CPI helpers | revisión estática (grep) |
 | Falsos positivos en tests negativos | `errorBlob` relanza `AssertionError`: un `expect.fail` dentro del `try` ya no es tragado por el `catch` | `tests/*.ts` | toda la suite |
+| Eventos falsificados o truncados | `emit_cpi!`: self-CPI firmada por la PDA `__event_authority`; una llamada externa sin esa firma → `ConstraintSigner` | `events.rs` + `#[event_cpi]` | security: events (4 tests) |
 
 ---
 
@@ -50,16 +51,18 @@ Matriz final (Fase 8) de mitigaciones Sealevel / curso de seguridad Solana ↔ i
 
 ## 3. Compute units (caminos calientes)
 
-Revisión cualitativa (sin microbenchmark en CI):
+Medido en localnet con `getTransaction` (logs `consumed N of 200000`), mismos flujos de test antes y después de agregar eventos (Fase 10):
 
-| Camino | Coste relativo | Notas |
-|--------|----------------|-------|
-| `initialize` | Alto (one-shot) | Varios `init` + ATAs + parseo TLV de extensiones del mint; no está en hot path de trading |
-| `deposit` / `withdraw` | Medio | 2–3 CPI token + math proporcional |
-| `swap` | Caliente | Fee + 1 división + 2 `transfer_checked`; sin loops |
-| `set_locked` / `set_authority` | Muy bajo | Solo constraint + escritura en `Config`; sin CPI |
+| Camino | Sin eventos | Con eventos | Notas |
+|--------|-------------|-------------|-------|
+| `initialize` | 74–84k | 90–99k | One-shot: varios `init` + ATAs + parseo TLV del mint; no está en el hot path |
+| `deposit` (primero) | ~134k | ~139k | Crea `user_lp` y `lock_lp` con `init_if_needed` |
+| `deposit` (siguientes) | ~56k | ~67k | 2 `transfer_checked` + `mint_to` + math proporcional |
+| `withdraw` | ~49k | ~61k | `burn` + 2 `transfer_checked` |
+| `swap` | ~44k | ~49k | Fee + 1 división + 2 `transfer_checked`; sin loops |
+| `set_locked` / `set_authority` | ~3.6k | ~13k | Constraint + escritura en `Config` + evento |
 
-Recomendación operativa: medir con `getTransaction` / logs del validator tras `anchor test` o deploy local si se necesita presupuesto CU estricto. No hay work O(n) en el programa.
+La self-CPI del evento consume ~3.6k dentro del programa; el resto del sobrecosto (≈ 5–12k en total) es el `invoke` y la derivación de la PDA `__event_authority`. La variación entre corridas viene de la búsqueda de bump de las ATAs (depende de las direcciones de los mints). Todo queda muy por debajo del límite de 200k. No hay work O(n) en el programa.
 
 ---
 
@@ -79,7 +82,7 @@ Recomendación operativa: medir con `getTransaction` / logs del validator tras `
 - [x] `cargo clippy -p amm --lib --tests -- -D warnings`
 - [x] README raíz + diagramas alineados
 - [x] Esta matriz de auditoría
-- [x] `anchor test` verde (39 passing)
+- [x] `anchor test` verde (43 passing)
 - [x] Visto bueno humano de cierre (2026-09-22)
 
 **Sin TODOs de seguridad pendientes en el árbol del programa.**
@@ -126,3 +129,17 @@ Sobrevivientes equivalentes (otra validación previa rechaza el mismo caso; se m
 | `amount_in > 0` (swap) y `lp_amount > 0` (withdraw) | `amount_out_for_swap` / `amounts_for_withdraw` repiten la verificación con el mismo error |
 
 Además, `errorBlob` relanza `AssertionError` y todos los tests negativos usan `expectError(action, /Patrón/)`, que elimina los falsos positivos del patrón `try { …; expect.fail() } catch`.
+
+---
+
+## 8. Eventos (Fase 10)
+
+Cada instrucción emite un evento con `emit_cpi!`: el programa se invoca a sí mismo con los datos del evento y la PDA `__event_authority` firma esa invocación.
+
+- **No se pueden falsificar:** el despacho de eventos que genera Anchor exige que `event_authority` firme y sea la PDA canónica. Solo el propio programa puede producir esa firma; un tercero que llame directo recibe `ConstraintSigner` (test: *events cannot be forged*).
+- **No se truncan:** los datos viajan como datos de una instrucción interna, no como líneas de log (límite ~10 KB por transacción).
+- **Sin poderes nuevos:** las cuentas agregadas (`event_authority`, `program`) son de solo lectura y la self-CPI no recibe otras cuentas, así que no puede mover fondos ni escribir estado.
+- **Datos verificados:** los tests comparan montos y reservas posteriores de cada evento con los saldos on-chain de los vaults. Las reservas se calculan con `checked_add` / `checked_sub` → `MathOverflow`.
+- **Red antes que verde:** los 4 tests se ejecutaron contra el programa sin eventos y fallaron antes de implementar.
+
+Limitación: los eventos viven en el historial de transacciones del RPC, no en estado on-chain. Para historia completa hace falta un RPC con archivo o un indexador propio.
