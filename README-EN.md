@@ -35,14 +35,23 @@ cargo build-sbf -p amm
 ## Tests
 
 ```bash
-# On-chain suite (local validator + 37 amm + security tests)
+# On-chain suite (local validator + 39 amm + security tests)
 anchor test
 
-# Math / host unit tests only (16 tests)
+# Math / host unit tests only (22 tests: 16 unit + 6 proptest properties)
 cargo test -p amm
 
 # Frontend (14 Vitest tests)
 npm run app:test
+```
+
+Mutation testing (checks that the tests catch deliberately injected bugs):
+
+```bash
+# Math: cargo-mutants (cargo install --locked cargo-mutants)
+cargo mutants -p amm --file programs/amm/src/helpers/math.rs
+# On-chain validations (require!/constraint) against anchor test; ~2 min per mutant
+python3 scripts/mutation-onchain.py
 ```
 
 Rust lint:

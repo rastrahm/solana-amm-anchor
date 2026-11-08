@@ -367,3 +367,130 @@ mod tests {
         assert!(amount_out_for_swap(100, 0, 1_000, 30).is_err());
     }
 }
+
+/// Property-based invariants over the whole pool math.
+///
+/// Bounds (`<= 10^15`) keep every intermediate product below `u128::MAX`, so failures
+/// point at logic errors, not at the documented `MathOverflow` guard.
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use crate::state::MAX_FEE_BPS;
+    use proptest::prelude::*;
+
+    const MAX: u64 = 1_000_000_000_000_000;
+
+    fn amount() -> impl Strategy<Value = u64> {
+        1..=MAX
+    }
+
+    proptest! {
+        #[test]
+        fn sqrt_is_floor_of_real_root(value in any::<u128>()) {
+            let root = integer_sqrt(value).unwrap() as u128;
+            prop_assert!(root * root <= value);
+            let next = root + 1;
+            prop_assert!(next.checked_mul(next).is_none_or(|sq| sq > value));
+        }
+
+        #[test]
+        fn first_deposit_locks_minimum_and_pulls_maxima(max_x in amount(), max_y in amount()) {
+            let root = integer_sqrt(max_x as u128 * max_y as u128).unwrap();
+            match deposit_quote(max_x, max_y, 0, 0, 0) {
+                Ok(q) => {
+                    prop_assert!(q.lock_minimum);
+                    prop_assert_eq!(q.lp_to_user + MINIMUM_LIQUIDITY, root);
+                    prop_assert_eq!((q.amount_x, q.amount_y), (max_x, max_y));
+                }
+                Err(_) => prop_assert!(root <= MINIMUM_LIQUIDITY),
+            }
+        }
+
+        #[test]
+        fn deposit_never_exceeds_maxima_nor_dilutes_lps(
+            max_x in amount(), max_y in amount(),
+            reserve_x in amount(), reserve_y in amount(), total in amount(),
+        ) {
+            let (rx, ry, l) = (reserve_x as u128, reserve_y as u128, total as u128);
+            match deposit_quote(max_x, max_y, reserve_x, reserve_y, total) {
+                Ok(q) => {
+                    let (ax, ay, lp) = (q.amount_x as u128, q.amount_y as u128, q.lp_to_user as u128);
+                    prop_assert!(!q.lock_minimum);
+                    prop_assert!(lp > 0);
+                    prop_assert!(q.amount_x <= max_x && q.amount_y <= max_y);
+                    // Value per LP never decreases: (rx + ax) / (l + lp) >= rx / l.
+                    prop_assert!(ax * l >= lp * rx);
+                    prop_assert!(ay * l >= lp * ry);
+                    // At most 1 unit of rounding dust over the exact proportional share.
+                    prop_assert!(ax * l < (lp * rx) + l);
+                    prop_assert!(ay * l < (lp * ry) + l);
+                    // LP is maximal: one more LP would exceed one of the maxima.
+                    let next = lp + 1;
+                    prop_assert!(max_x as u128 * l < next * rx || max_y as u128 * l < next * ry);
+                }
+                Err(_) => prop_assert!(max_x as u128 * l < rx || max_y as u128 * l < ry),
+            }
+        }
+
+        #[test]
+        fn deposit_then_withdraw_never_profits(
+            max_x in amount(), max_y in amount(),
+            reserve_x in amount(), reserve_y in amount(),
+            total in MINIMUM_LIQUIDITY..=MAX,
+        ) {
+            let Ok(q) = deposit_quote(max_x, max_y, reserve_x, reserve_y, total) else {
+                return Ok(());
+            };
+            let new_total = total + q.lp_to_user;
+            if let Ok((wx, wy)) = amounts_for_withdraw(
+                q.lp_to_user,
+                reserve_x + q.amount_x,
+                reserve_y + q.amount_y,
+                new_total,
+            ) {
+                prop_assert!(wx <= q.amount_x && wy <= q.amount_y);
+            }
+        }
+
+        #[test]
+        fn withdraw_is_floor_of_share_and_keeps_lock(
+            reserve_x in amount(), reserve_y in amount(),
+            total in (MINIMUM_LIQUIDITY + 1)..=MAX, lp_seed in any::<u64>(),
+        ) {
+            let lp_amount = 1 + lp_seed % (total - 1);
+            match amounts_for_withdraw(lp_amount, reserve_x, reserve_y, total) {
+                Ok((x, y)) => {
+                    let (lp, l) = (lp_amount as u128, total as u128);
+                    prop_assert!(x as u128 * l <= lp * reserve_x as u128);
+                    prop_assert!(y as u128 * l <= lp * reserve_y as u128);
+                    prop_assert!(total - lp_amount >= MINIMUM_LIQUIDITY);
+                    prop_assert!(x > 0 && y > 0);
+                }
+                Err(_) => {
+                    let remaining_ok = total - lp_amount >= MINIMUM_LIQUIDITY;
+                    let x = lp_amount as u128 * reserve_x as u128 / total as u128;
+                    let y = lp_amount as u128 * reserve_y as u128 / total as u128;
+                    prop_assert!(!remaining_ok || x == 0 || y == 0);
+                }
+            }
+        }
+
+        #[test]
+        fn swap_never_decreases_k_and_fee_never_helps(
+            amount_in in amount(), reserve_in in amount(), reserve_out in amount(),
+            fee in 0u16..=MAX_FEE_BPS,
+        ) {
+            if let Ok(out) = amount_out_for_swap(amount_in, reserve_in, reserve_out, fee) {
+                let (ain, rin, rout, o) =
+                    (amount_in as u128, reserve_in as u128, reserve_out as u128, out as u128);
+                prop_assert!(o > 0 && o < rout);
+                prop_assert!((rin + ain) * (rout - o) >= rin * rout);
+                // Output never exceeds the fee-free constant-product output.
+                prop_assert!(o * (rin + ain) <= ain * rout);
+                if let Ok(no_fee) = amount_out_for_swap(amount_in, reserve_in, reserve_out, 0) {
+                    prop_assert!(out <= no_fee);
+                }
+            }
+        }
+    }
+}

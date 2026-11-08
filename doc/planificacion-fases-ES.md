@@ -287,11 +287,15 @@ Autorizo Fase N — <nombre>
 - [x] Admin: `set_locked` y `set_authority` (`UpdateConfig`, solo `config.authority`); pausa deposit/swap, `withdraw` nunca se bloquea; renuncia con `None`
 - [x] Suite de tests: `errorBlob` relanza `AssertionError` para que un `expect.fail` no sea tragado por el `catch` (había falsos positivos)
 - [x] IDL copiado a la app; etiquetas "Máx. X / Máx. Y" y ayuda ES/EN actualizada
-- [x] Documentación ES/EN (README, auditoría §1/§3/§4/§6, diagramas, flujogramas)
+- [x] Documentación ES/EN (README, auditoría §1/§3/§4/§6/§7, diagramas, flujogramas)
+- [x] `.cursorrules`: vectores H–K (donaciones, política de mints, ratio de depósito, poderes del admin) y "Test Quality Gates"
+- [x] `proptest`: 6 propiedades sobre la matemática (depósito, retiro, swap, sqrt, ida y vuelta sin ganancia)
+- [x] Mutation testing: `cargo mutants` (math, 0 sobrevivientes) y `scripts/mutation-onchain.py` (validaciones on-chain; 2 huecos cerrados, 10 equivalentes justificados)
+- [x] Helper `expectError` en todos los tests negativos
 
 **Criterios de aceptación:**
-- [x] `anchor test` verde (37 passing)
-- [x] `cargo test -p amm` (16 tests) · `cargo clippy -D warnings` · `cargo fmt --check`
+- [x] `anchor test` verde (39 passing)
+- [x] `cargo test -p amm` (22 tests) · `cargo clippy -D warnings` · `cargo fmt --check`
 - [x] App: `tsc --noEmit` + Vitest (14 tests)
 
 **Trade-off conocido:** stablecoins con freeze authority (p. ej. USDC) no se pueden listar.

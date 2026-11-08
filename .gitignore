@@ -84,3 +84,7 @@ graphify-out/
 *.tmp
 *.temp
 .cache/
+
+# cargo-mutants output
+mutants.out/
+mutants.out.old/

@@ -52,6 +52,23 @@ describe("phase6: sealevel security", () => {
     return `${anchorErr.message ?? ""}\n${logs}\n${code}`;
   }
 
+  /** Awaits `action` and asserts it rejects with an error matching `pattern`. */
+  async function expectError(
+    action: () => Promise<unknown>,
+    pattern: RegExp
+  ): Promise<void> {
+    let caught: unknown = undefined;
+    let rejected = false;
+    try {
+      await action();
+    } catch (err: unknown) {
+      rejected = true;
+      caught = err;
+    }
+    if (!rejected) expect.fail(`expected rejection matching ${pattern}`);
+    expect(errorBlob(caught)).to.match(pattern);
+  }
+
   async function createPairMints(): Promise<[PublicKey, PublicKey]> {
     const x = await createMint(
       connection,
@@ -90,7 +107,9 @@ describe("phase6: sealevel security", () => {
 
   type Token2022Extension = "none" | "transferFee" | "permanentDelegate";
 
-  async function createToken2022Mint(extension: Token2022Extension): Promise<PublicKey> {
+  async function createToken2022Mint(
+    extension: Token2022Extension
+  ): Promise<PublicKey> {
     const mint = Keypair.generate();
     const extensions =
       extension === "transferFee"
@@ -152,8 +171,18 @@ describe("phase6: sealevel security", () => {
     authority: PublicKey | null = null
   ) {
     const { config, mintLp } = derivePoolPdas(seed);
-    const vaultX = getAssociatedTokenAddressSync(mintX, config, true, tokenProgram);
-    const vaultY = getAssociatedTokenAddressSync(mintY, config, true, tokenProgram);
+    const vaultX = getAssociatedTokenAddressSync(
+      mintX,
+      config,
+      true,
+      tokenProgram
+    );
+    const vaultY = getAssociatedTokenAddressSync(
+      mintY,
+      config,
+      true,
+      tokenProgram
+    );
 
     await program.methods
       .initialize(seed, fee, authority)
@@ -231,8 +260,18 @@ describe("phase6: sealevel security", () => {
     tokenProgram: PublicKey = TOKEN_PROGRAM_ID
   ) {
     const { config, mintLp } = derivePoolPdas(seed);
-    const vaultX = getAssociatedTokenAddressSync(mintX, config, true, tokenProgram);
-    const vaultY = getAssociatedTokenAddressSync(mintY, config, true, tokenProgram);
+    const vaultX = getAssociatedTokenAddressSync(
+      mintX,
+      config,
+      true,
+      tokenProgram
+    );
+    const vaultY = getAssociatedTokenAddressSync(
+      mintY,
+      config,
+      true,
+      tokenProgram
+    );
     const userX = getAssociatedTokenAddressSync(
       mintX,
       wallet.publicKey,
@@ -251,7 +290,12 @@ describe("phase6: sealevel security", () => {
       false,
       tokenProgram
     );
-    const lockLp = getAssociatedTokenAddressSync(mintLp, config, true, tokenProgram);
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      config,
+      true,
+      tokenProgram
+    );
 
     return program.methods
       .deposit(
@@ -297,7 +341,9 @@ describe("phase6: sealevel security", () => {
 
     // Fake account: same size as Config, owned by the program, zeroed discriminator.
     const fake = Keypair.generate();
-    const lamports = await connection.getMinimumBalanceForRentExemption(CONFIG_ACCOUNT_SPACE);
+    const lamports = await connection.getMinimumBalanceForRentExemption(
+      CONFIG_ACCOUNT_SPACE
+    );
     const tx = new Transaction().add(
       SystemProgram.createAccount({
         fromPubkey: wallet.publicKey,
@@ -309,21 +355,18 @@ describe("phase6: sealevel security", () => {
     );
     await sendAndConfirmTransaction(connection, tx, [wallet.payer, fake]);
 
-    try {
-      await deposit(
-        seed,
-        mintX,
-        mintY,
-        new BN(1_000_000),
-        new BN(1_000_000 - MINIMUM_LIQUIDITY),
-        { config: fake.publicKey }
-      );
-      expect.fail("expected type cosplay to fail");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(
-        /AccountDiscriminator|AccountDidNotDeserialize|ConstraintSeeds|custom program error/i
-      );
-    }
+    await expectError(
+      () =>
+        deposit(
+          seed,
+          mintX,
+          mintY,
+          new BN(1_000_000),
+          new BN(1_000_000 - MINIMUM_LIQUIDITY),
+          { config: fake.publicKey }
+        ),
+      /AccountDiscriminator|AccountDidNotDeserialize|ConstraintSeeds|custom program error/i
+    );
   });
 
   it("arbitrary CPI: rejects non-Token program as token_program", async () => {
@@ -332,21 +375,18 @@ describe("phase6: sealevel security", () => {
     await initializePool(seed, mintX, mintY);
     await fundUser(mintX, mintY, 2_000_000n);
 
-    try {
-      await deposit(
-        seed,
-        mintX,
-        mintY,
-        new BN(1_000_000),
-        new BN(1_000_000 - MINIMUM_LIQUIDITY),
-        { tokenProgram: SystemProgram.programId }
-      );
-      expect.fail("expected arbitrary CPI to fail");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(
-        /InvalidProgramId|InterfaceAccount|AccountOwnedByWrongProgram|custom program error|Constraint/i
-      );
-    }
+    await expectError(
+      () =>
+        deposit(
+          seed,
+          mintX,
+          mintY,
+          new BN(1_000_000),
+          new BN(1_000_000 - MINIMUM_LIQUIDITY),
+          { tokenProgram: SystemProgram.programId }
+        ),
+      /InvalidProgramId|InterfaceAccount|AccountOwnedByWrongProgram|custom program error|Constraint/i
+    );
   });
 
   it("duplicate accounts: rejects vault_x == vault_y", async () => {
@@ -355,25 +395,27 @@ describe("phase6: sealevel security", () => {
     const { config, vaultX } = await initializePool(seed, mintX, mintY);
     await fundUser(mintX, mintY, 2_000_000n);
 
-    try {
-      await deposit(
-        seed,
-        mintX,
-        mintY,
-        new BN(1_000_000),
-        new BN(1_000_000 - MINIMUM_LIQUIDITY),
-        { vaultY: vaultX }
-      );
-      expect.fail("expected IdenticalVaults");
-    } catch (err: unknown) {
-      // Constraint / IdenticalVaults / mint mismatch on associated_token
-      expect(errorBlob(err)).to.match(
-        /IdenticalVaults|ConstraintTokenMint|ConstraintAssociated|6000|0x1770|custom program error/i
-      );
-    }
+    // Constraint / IdenticalVaults / mint mismatch on associated_token
+    await expectError(
+      () =>
+        deposit(
+          seed,
+          mintX,
+          mintY,
+          new BN(1_000_000),
+          new BN(1_000_000 - MINIMUM_LIQUIDITY),
+          { vaultY: vaultX }
+        ),
+      /IdenticalVaults|ConstraintTokenMint|ConstraintAssociated|6000|0x1770|custom program error/i
+    );
 
     // Sanity: config still distinct from a real vaultY
-    const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+    const vaultY = getAssociatedTokenAddressSync(
+      mintY,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
     expect(vaultX.equals(vaultY)).to.equal(false);
   });
 
@@ -385,41 +427,68 @@ describe("phase6: sealevel security", () => {
 
     const impostor = Keypair.generate();
     const { config, mintLp } = derivePoolPdas(seed);
-    const vaultX = getAssociatedTokenAddressSync(mintX, config, true, TOKEN_PROGRAM_ID);
-    const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+    const vaultX = getAssociatedTokenAddressSync(
+      mintX,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
+    const vaultY = getAssociatedTokenAddressSync(
+      mintY,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
     // Impostor's ATAs won't exist / won't match wallet balances; force user=impostor without signature
-    const userX = getAssociatedTokenAddressSync(mintX, wallet.publicKey, false, TOKEN_PROGRAM_ID);
-    const userY = getAssociatedTokenAddressSync(mintY, wallet.publicKey, false, TOKEN_PROGRAM_ID);
-    const userLp = getAssociatedTokenAddressSync(mintLp, impostor.publicKey, false, TOKEN_PROGRAM_ID);
-    const lockLp = getAssociatedTokenAddressSync(mintLp, config, true, TOKEN_PROGRAM_ID);
+    const userX = getAssociatedTokenAddressSync(
+      mintX,
+      wallet.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
+    const userY = getAssociatedTokenAddressSync(
+      mintY,
+      wallet.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
+    const userLp = getAssociatedTokenAddressSync(
+      mintLp,
+      impostor.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
 
-    try {
-      await program.methods
-        .deposit(new BN(1_000_000), new BN(1_000_000), new BN(1))
-        .accountsPartial({
-          user: impostor.publicKey,
-          mintX,
-          mintY,
-          mintLp,
-          config,
-          vaultX,
-          vaultY,
-          userX,
-          userY,
-          userLp,
-          lockLp,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([]) // only provider wallet signs — impostor does not
-        .rpc();
-      expect.fail("expected missing signer failure");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(
-        /Signature verification|unknown signer|Missing signature|ConstraintRaw|AccountNotSigner|custom program error|Simulation failed/i
-      );
-    }
+    await expectError(
+      () =>
+        program.methods
+          .deposit(new BN(1_000_000), new BN(1_000_000), new BN(1))
+          .accountsPartial({
+            user: impostor.publicKey,
+            mintX,
+            mintY,
+            mintLp,
+            config,
+            vaultX,
+            vaultY,
+            userX,
+            userY,
+            userLp,
+            lockLp,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .signers([]) // only provider wallet signs — impostor does not
+          .rpc(),
+      /Signature verification|unknown signer|Missing signature|ConstraintRaw|AccountNotSigner|custom program error|Simulation failed/i
+    );
   });
 
   it("first-deposit inflation: rejects 1-token bootstrap that would enable share manipulation", async () => {
@@ -429,12 +498,10 @@ describe("phase6: sealevel security", () => {
     await fundUser(mintX, mintY, 10_000n);
 
     // sqrt(1*1)=1 <= MINIMUM_LIQUIDITY → rejected (cannot seed an attackable pool)
-    try {
-      await deposit(seed, mintX, mintY, new BN(1), new BN(0));
-      expect.fail("expected InsufficientLiquidity");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/InsufficientLiquidity|6005|0x1775/i);
-    }
+    await expectError(
+      () => deposit(seed, mintX, mintY, new BN(1), new BN(0)),
+      /InsufficientLiquidity|6005|0x1775/i
+    );
 
     // Minimal viable first deposit still locks MINIMUM_LIQUIDITY
     const minViable = 1_001; // sqrt(1001*1001)=1001 > 1000
@@ -447,7 +514,12 @@ describe("phase6: sealevel security", () => {
       new BN(minViable - MINIMUM_LIQUIDITY)
     );
     const { config, mintLp } = derivePoolPdas(seed);
-    const lockLp = getAssociatedTokenAddressSync(mintLp, config, true, TOKEN_PROGRAM_ID);
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
     const lock = await getAccount(connection, lockLp);
     expect(Number(lock.amount)).to.equal(MINIMUM_LIQUIDITY);
   });
@@ -479,35 +551,37 @@ describe("phase6: sealevel security", () => {
       false,
       TOKEN_PROGRAM_ID
     );
-    const lockLp = getAssociatedTokenAddressSync(mintLp, poolA.config, true, TOKEN_PROGRAM_ID);
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      poolA.config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
 
-    try {
-      // Vaults/mint_lp belong to pool A, but config is pool B (different seed + bump).
-      await program.methods
-        .deposit(new BN(1_000_000), new BN(1_000_000), new BN(1))
-        .accountsPartial({
-          user: wallet.publicKey,
-          mintX,
-          mintY,
-          mintLp,
-          config: poolB.config,
-          vaultX: poolA.vaultX,
-          vaultY: poolA.vaultY,
-          userX,
-          userY,
-          userLp,
-          lockLp,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-      expect.fail("expected ConstraintSeeds / has_one failure");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(
-        /ConstraintSeeds|ConstraintHasOne|ConstraintAssociated|A seeds constraint|custom program error|Simulation failed/i
-      );
-    }
+    // Vaults/mint_lp belong to pool A, but config is pool B (different seed + bump).
+    await expectError(
+      () =>
+        program.methods
+          .deposit(new BN(1_000_000), new BN(1_000_000), new BN(1))
+          .accountsPartial({
+            user: wallet.publicKey,
+            mintX,
+            mintY,
+            mintLp,
+            config: poolB.config,
+            vaultX: poolA.vaultX,
+            vaultY: poolA.vaultY,
+            userX,
+            userY,
+            userLp,
+            lockLp,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc(),
+      /ConstraintSeeds|ConstraintHasOne|ConstraintAssociated|A seeds constraint|custom program error|Simulation failed/i
+    );
   });
 
   it("wrong authority: cannot withdraw LP owned by another wallet", async () => {
@@ -529,8 +603,18 @@ describe("phase6: sealevel security", () => {
     await connection.confirmTransaction(sig, "confirmed");
 
     const { config, mintLp } = derivePoolPdas(seed);
-    const vaultX = getAssociatedTokenAddressSync(mintX, config, true, TOKEN_PROGRAM_ID);
-    const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+    const vaultX = getAssociatedTokenAddressSync(
+      mintX,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
+    const vaultY = getAssociatedTokenAddressSync(
+      mintY,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
     // Victim's LP ATA passed while thief is the signer → ConstraintTokenOwner / authority mismatch
     const victimLp = getAssociatedTokenAddressSync(
       mintLp,
@@ -555,30 +639,27 @@ describe("phase6: sealevel security", () => {
       TOKEN_PROGRAM_ID
     );
 
-    try {
-      await program.methods
-        .withdraw(new BN(100_000), new BN(0), new BN(0))
-        .accountsPartial({
-          user: thief.publicKey,
-          mintX,
-          mintY,
-          mintLp,
-          config,
-          vaultX,
-          vaultY,
-          userX: thiefX,
-          userY: thiefY,
-          userLp: victimLp,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([thief])
-        .rpc();
-      expect.fail("expected wrong-authority withdraw to fail");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(
-        /ConstraintTokenOwner|ConstraintAssociated|owner|custom program error|Simulation failed/i
-      );
-    }
+    await expectError(
+      () =>
+        program.methods
+          .withdraw(new BN(100_000), new BN(0), new BN(0))
+          .accountsPartial({
+            user: thief.publicKey,
+            mintX,
+            mintY,
+            mintLp,
+            config,
+            vaultX,
+            vaultY,
+            userX: thiefX,
+            userY: thiefY,
+            userLp: victimLp,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([thief])
+          .rpc(),
+      /ConstraintTokenOwner|ConstraintAssociated|owner|custom program error|Simulation failed/i
+    );
   });
 
   it("donation griefing: 1-unit transfer into an empty vault does not brick the first deposit", async () => {
@@ -610,13 +691,27 @@ describe("phase6: sealevel security", () => {
       new BN(1_000_000 - MINIMUM_LIQUIDITY)
     );
 
-    const userLp = getAssociatedTokenAddressSync(mintLp, wallet.publicKey, false, TOKEN_PROGRAM_ID);
-    const lockLp = getAssociatedTokenAddressSync(mintLp, config, true, TOKEN_PROGRAM_ID);
+    const userLp = getAssociatedTokenAddressSync(
+      mintLp,
+      wallet.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
     expect(Number((await getAccount(connection, userLp)).amount)).to.equal(
       1_000_000 - MINIMUM_LIQUIDITY
     );
-    expect(Number((await getAccount(connection, lockLp)).amount)).to.equal(MINIMUM_LIQUIDITY);
-    expect(Number((await getAccount(connection, vaultX)).amount)).to.equal(1_000_001);
+    expect(Number((await getAccount(connection, lockLp)).amount)).to.equal(
+      MINIMUM_LIQUIDITY
+    );
+    expect(Number((await getAccount(connection, vaultX)).amount)).to.equal(
+      1_000_001
+    );
   });
 
   it("token-2022: rejects mints with TransferFeeConfig (vault would receive less than credited)", async () => {
@@ -624,12 +719,10 @@ describe("phase6: sealevel security", () => {
     const mintX = await createToken2022Mint("transferFee");
     const mintY = await createToken2022Mint("none");
 
-    try {
-      await initializePool(seed, mintX, mintY, 30, TOKEN_2022_PROGRAM_ID);
-      expect.fail("expected UnsupportedMintExtension");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/UnsupportedMintExtension/);
-    }
+    await expectError(
+      () => initializePool(seed, mintX, mintY, 30, TOKEN_2022_PROGRAM_ID),
+      /UnsupportedMintExtension/
+    );
   });
 
   it("token-2022: rejects mints with PermanentDelegate (vault could be drained by the delegate)", async () => {
@@ -637,12 +730,10 @@ describe("phase6: sealevel security", () => {
     const mintX = await createToken2022Mint("none");
     const mintY = await createToken2022Mint("permanentDelegate");
 
-    try {
-      await initializePool(seed, mintX, mintY, 30, TOKEN_2022_PROGRAM_ID);
-      expect.fail("expected UnsupportedMintExtension");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/UnsupportedMintExtension/);
-    }
+    await expectError(
+      () => initializePool(seed, mintX, mintY, 30, TOKEN_2022_PROGRAM_ID),
+      /UnsupportedMintExtension/
+    );
   });
 
   it("token-2022: plain mints without extensions initialize and accept deposits", async () => {
@@ -671,10 +762,25 @@ describe("phase6: sealevel security", () => {
       TOKEN_2022_PROGRAM_ID
     );
 
-    const lockLp = getAssociatedTokenAddressSync(mintLp, config, true, TOKEN_2022_PROGRAM_ID);
-    const lock = await getAccount(connection, lockLp, undefined, TOKEN_2022_PROGRAM_ID);
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      config,
+      true,
+      TOKEN_2022_PROGRAM_ID
+    );
+    const lock = await getAccount(
+      connection,
+      lockLp,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    );
     expect(Number(lock.amount)).to.equal(MINIMUM_LIQUIDITY);
-    const vy = await getAccount(connection, vaultY, undefined, TOKEN_2022_PROGRAM_ID);
+    const vy = await getAccount(
+      connection,
+      vaultY,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    );
     expect(Number(vy.amount)).to.equal(1_000_000);
   });
 
@@ -700,11 +806,24 @@ describe("phase6: sealevel security", () => {
       new BN(100_000)
     );
 
-    expect(Number((await getAccount(connection, userX)).amount)).to.equal(900_000);
-    expect(Number((await getAccount(connection, userY)).amount)).to.equal(900_000);
-    expect(Number((await getAccount(connection, vaultX)).amount)).to.equal(1_100_000);
-    expect(Number((await getAccount(connection, vaultY)).amount)).to.equal(1_100_000);
-    const userLp = getAssociatedTokenAddressSync(mintLp, wallet.publicKey, false, TOKEN_PROGRAM_ID);
+    expect(Number((await getAccount(connection, userX)).amount)).to.equal(
+      900_000
+    );
+    expect(Number((await getAccount(connection, userY)).amount)).to.equal(
+      900_000
+    );
+    expect(Number((await getAccount(connection, vaultX)).amount)).to.equal(
+      1_100_000
+    );
+    expect(Number((await getAccount(connection, vaultY)).amount)).to.equal(
+      1_100_000
+    );
+    const userLp = getAssociatedTokenAddressSync(
+      mintLp,
+      wallet.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
     expect(Number((await getAccount(connection, userLp)).amount)).to.equal(
       1_000_000 - MINIMUM_LIQUIDITY + 100_000
     );
@@ -724,15 +843,17 @@ describe("phase6: sealevel security", () => {
     );
     const [, mintY] = await createPairMints();
 
-    try {
-      await initializePool(seed, freezable, mintY);
-      expect.fail("expected MintHasFreezeAuthority");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/MintHasFreezeAuthority/);
-    }
+    await expectError(
+      () => initializePool(seed, freezable, mintY),
+      /MintHasFreezeAuthority/
+    );
   });
 
-  async function setLocked(config: PublicKey, locked: boolean, signer: Keypair = wallet.payer) {
+  async function setLocked(
+    config: PublicKey,
+    locked: boolean,
+    signer: Keypair = wallet.payer
+  ) {
     return program.methods
       .setLocked(locked)
       .accountsPartial({ authority: signer.publicKey, config })
@@ -782,35 +903,37 @@ describe("phase6: sealevel security", () => {
     await setLocked(config, true);
     expect((await program.account.config.fetch(config)).locked).to.equal(true);
 
-    try {
-      await deposit(seed, mintX, mintY, new BN(100_000), new BN(0));
-      expect.fail("expected PoolLocked on deposit");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/PoolLocked/);
-    }
+    await expectError(
+      () => deposit(seed, mintX, mintY, new BN(100_000), new BN(0)),
+      /PoolLocked/
+    );
 
-    try {
-      await program.methods
-        .swap(true, new BN(10_000), new BN(0))
-        .accountsPartial({
-          user: wallet.publicKey,
-          mintX,
-          mintY,
-          config,
-          vaultX,
-          vaultY,
-          userX,
-          userY,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .rpc();
-      expect.fail("expected PoolLocked on swap");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/PoolLocked/);
-    }
+    await expectError(
+      () =>
+        program.methods
+          .swap(true, new BN(10_000), new BN(0))
+          .accountsPartial({
+            user: wallet.publicKey,
+            mintX,
+            mintY,
+            config,
+            vaultX,
+            vaultY,
+            userX,
+            userY,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .rpc(),
+      /PoolLocked/
+    );
 
     // LPs can always exit: a pause must never trap funds.
-    const userLp = getAssociatedTokenAddressSync(mintLp, wallet.publicKey, false, TOKEN_PROGRAM_ID);
+    const userLp = getAssociatedTokenAddressSync(
+      mintLp,
+      wallet.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
     await program.methods
       .withdraw(new BN(100_000), new BN(1), new BN(1))
       .accountsPartial({
@@ -847,21 +970,16 @@ describe("phase6: sealevel security", () => {
     );
     const stranger = await fundedKeypair();
 
-    try {
-      await setLocked(withAdmin.config, true, stranger);
-      expect.fail("expected Unauthorized for stranger");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/Unauthorized/);
-    }
+    await expectError(
+      () => setLocked(withAdmin.config, true, stranger),
+      /Unauthorized/
+    );
 
     const noAdmin = await initializePool(new BN(617), mintX, mintY);
-    try {
-      await setLocked(noAdmin.config, true);
-      expect.fail("expected Unauthorized on immutable pool");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/Unauthorized/);
-    }
-    expect((await program.account.config.fetch(noAdmin.config)).locked).to.equal(false);
+    await expectError(() => setLocked(noAdmin.config, true), /Unauthorized/);
+    expect(
+      (await program.account.config.fetch(noAdmin.config)).locked
+    ).to.equal(false);
   });
 
   it("admin: authority can be transferred and renounced", async () => {
@@ -877,27 +995,154 @@ describe("phase6: sealevel security", () => {
     const nextAdmin = await fundedKeypair();
 
     await setAuthority(config, nextAdmin.publicKey);
-    expect((await program.account.config.fetch(config)).authority!.equals(nextAdmin.publicKey)).to.equal(
-      true
-    );
+    expect(
+      (await program.account.config.fetch(config)).authority!.equals(
+        nextAdmin.publicKey
+      )
+    ).to.equal(true);
 
-    try {
-      await setLocked(config, true);
-      expect.fail("expected Unauthorized for previous admin");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/Unauthorized/);
-    }
+    await expectError(() => setLocked(config, true), /Unauthorized/);
 
     await setLocked(config, true, nextAdmin);
     await setLocked(config, false, nextAdmin);
 
     await setAuthority(config, null, nextAdmin);
-    expect((await program.account.config.fetch(config)).authority).to.equal(null);
-    try {
-      await setLocked(config, true, nextAdmin);
-      expect.fail("expected Unauthorized after renounce");
-    } catch (err: unknown) {
-      expect(errorBlob(err)).to.match(/Unauthorized/);
+    expect((await program.account.config.fetch(config)).authority).to.equal(
+      null
+    );
+    await expectError(() => setLocked(config, true, nextAdmin), /Unauthorized/);
+  });
+
+  it("withdraw: rejects burning more LP than the signer holds even when the pool could pay", async () => {
+    const seed = new BN(619);
+    const [mintX, mintY] = await createPairMints();
+    const { config, mintLp, vaultX, vaultY } = await initializePool(
+      seed,
+      mintX,
+      mintY
+    );
+    await fundUser(mintX, mintY, 1_000_000n);
+    await deposit(
+      seed,
+      mintX,
+      mintY,
+      new BN(1_000_000),
+      new BN(1_000_000 - MINIMUM_LIQUIDITY)
+    );
+
+    const lp2 = await fundedKeypair();
+    const atas = await Promise.all(
+      [mintX, mintY].map((mint) =>
+        createAssociatedTokenAccountIdempotent(
+          connection,
+          wallet.payer,
+          mint,
+          lp2.publicKey,
+          undefined,
+          TOKEN_PROGRAM_ID
+        )
+      )
+    );
+    for (const [i, mint] of [mintX, mintY].entries()) {
+      await mintTo(
+        connection,
+        wallet.payer,
+        mint,
+        atas[i],
+        wallet.payer,
+        100_000n,
+        undefined,
+        undefined,
+        TOKEN_PROGRAM_ID
+      );
     }
+    const [lp2X, lp2Y] = atas;
+    const lp2Lp = getAssociatedTokenAddressSync(
+      mintLp,
+      lp2.publicKey,
+      false,
+      TOKEN_PROGRAM_ID
+    );
+    const lockLp = getAssociatedTokenAddressSync(
+      mintLp,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
+    await program.methods
+      .deposit(new BN(100_000), new BN(100_000), new BN(100_000))
+      .accountsPartial({
+        user: lp2.publicKey,
+        mintX,
+        mintY,
+        mintLp,
+        config,
+        vaultX,
+        vaultY,
+        userX: lp2X,
+        userY: lp2Y,
+        userLp: lp2Lp,
+        lockLp,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([lp2])
+      .rpc();
+
+    // Supply is 1.1M, so burning 200k keeps the lock: only the holder-balance check can stop it.
+    await expectError(
+      () =>
+        program.methods
+          .withdraw(new BN(200_000), new BN(0), new BN(0))
+          .accountsPartial({
+            user: lp2.publicKey,
+            mintX,
+            mintY,
+            mintLp,
+            config,
+            vaultX,
+            vaultY,
+            userX: lp2X,
+            userY: lp2Y,
+            userLp: lp2Lp,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([lp2])
+          .rpc(),
+      /InsufficientLiquidity/
+    );
+  });
+
+  it("initialize: rejects vault_x == vault_y with IdenticalVaults", async () => {
+    const seed = new BN(620);
+    const [mintX, mintY] = await createPairMints();
+    const { config, mintLp } = derivePoolPdas(seed);
+    const vaultX = getAssociatedTokenAddressSync(
+      mintX,
+      config,
+      true,
+      TOKEN_PROGRAM_ID
+    );
+
+    await expectError(
+      () =>
+        program.methods
+          .initialize(seed, 30, null)
+          .accountsPartial({
+            initializer: wallet.publicKey,
+            mintX,
+            mintY,
+            config,
+            mintLp,
+            vaultX,
+            vaultY: vaultX,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc(),
+      /IdenticalVaults/
+    );
   });
 });

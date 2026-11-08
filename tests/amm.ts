@@ -45,6 +45,23 @@ describe("amm", () => {
     return `${anchorErr.message ?? ""}\n${logs}\n${code}`;
   }
 
+  /** Awaits `action` and asserts it rejects with an error matching `pattern`. */
+  async function expectError(
+    action: () => Promise<unknown>,
+    pattern: RegExp
+  ): Promise<void> {
+    let caught: unknown = undefined;
+    let rejected = false;
+    try {
+      await action();
+    } catch (err: unknown) {
+      rejected = true;
+      caught = err;
+    }
+    if (!rejected) expect.fail(`expected rejection matching ${pattern}`);
+    expect(errorBlob(caught)).to.match(pattern);
+  }
+
   async function createPairMints(): Promise<[PublicKey, PublicKey]> {
     const x = await createMint(
       connection,
@@ -273,7 +290,9 @@ describe("amm", () => {
       expect(configAccount.seed.toString()).to.equal(seed.toString());
       expect(configAccount.fee).to.equal(fee);
       expect(configAccount.locked).to.equal(false);
-      expect(configAccount.authority!.toBase58()).to.equal(authority.toBase58());
+      expect(configAccount.authority!.toBase58()).to.equal(
+        authority.toBase58()
+      );
       expect(configAccount.mintX.toBase58()).to.equal(mintX.toBase58());
       expect(configAccount.mintY.toBase58()).to.equal(mintY.toBase58());
       expect(configAccount.mintLp.toBase58()).to.equal(mintLp.toBase58());
@@ -303,51 +322,48 @@ describe("amm", () => {
         mintY: y,
       });
 
-      try {
-        await initializePool({
-          seed,
-          fee: 25,
-          authority: null,
-          mintX: x,
-          mintY: y,
-        });
-        expect.fail("expected second initialize to fail");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/already in use|custom program error: 0x0/i);
-      }
+      await expectError(
+        () =>
+          initializePool({
+            seed,
+            fee: 25,
+            authority: null,
+            mintX: x,
+            mintY: y,
+          }),
+        /already in use|custom program error: 0x0/i
+      );
     });
 
     it("rejects identical mint_x and mint_y", async () => {
       const seed = new BN(44);
-      try {
-        await initializePool({
-          seed,
-          fee: 30,
-          authority: null,
-          mintX,
-          mintY: mintX,
-        });
-        expect.fail("expected IdenticalMints error");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/IdenticalMints|6001|0x1771/i);
-      }
+      await expectError(
+        () =>
+          initializePool({
+            seed,
+            fee: 30,
+            authority: null,
+            mintX,
+            mintY: mintX,
+          }),
+        /IdenticalMints|6001|0x1771/i
+      );
     });
 
     it("rejects fee above MAX_FEE_BPS", async () => {
       const seed = new BN(45);
       const [x, y] = await createPairMints();
-      try {
-        await initializePool({
-          seed,
-          fee: 10_001,
-          authority: null,
-          mintX: x,
-          mintY: y,
-        });
-        expect.fail("expected InvalidFee error");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/InvalidFee|6002|0x1772/i);
-      }
+      await expectError(
+        () =>
+          initializePool({
+            seed,
+            fee: 10_001,
+            authority: null,
+            mintX: x,
+            mintY: y,
+          }),
+        /InvalidFee|6002|0x1772/i
+      );
     });
   });
 
@@ -367,14 +383,16 @@ describe("amm", () => {
       await fundUserAtas(mintX, mintY, amount, amount);
 
       const expectedUserLp = Number(amount) - MINIMUM_LIQUIDITY;
-      const { mintLp, vaultX, vaultY, userLp, lockLp } = await depositLiquidity({
-        seed,
-        mintX,
-        mintY,
-        amountX: new BN(amount.toString()),
-        amountY: new BN(amount.toString()),
-        minLp: new BN(expectedUserLp),
-      });
+      const { mintLp, vaultX, vaultY, userLp, lockLp } = await depositLiquidity(
+        {
+          seed,
+          mintX,
+          mintY,
+          amountX: new BN(amount.toString()),
+          amountY: new BN(amount.toString()),
+          minLp: new BN(expectedUserLp),
+        }
+      );
 
       const userLpAccount = await getAccount(connection, userLp);
       const lockLpAccount = await getAccount(connection, lockLp);
@@ -439,19 +457,18 @@ describe("amm", () => {
       });
       await fundUserAtas(mintX, mintY, 1_000_000n, 1_000_000n);
 
-      try {
-        await depositLiquidity({
-          seed,
-          mintX,
-          mintY,
-          amountX: new BN(0),
-          amountY: new BN(1_000_000),
-          minLp: new BN(0),
-        });
-        expect.fail("expected InvalidAmount");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/InvalidAmount|6008|0x1778/i);
-      }
+      await expectError(
+        () =>
+          depositLiquidity({
+            seed,
+            mintX,
+            mintY,
+            amountX: new BN(0),
+            amountY: new BN(1_000_000),
+            minLp: new BN(0),
+          }),
+        /InvalidAmount|6008|0x1778/i
+      );
     });
 
     it("rejects slippage when min_lp is too high", async () => {
@@ -466,19 +483,18 @@ describe("amm", () => {
       });
       await fundUserAtas(mintX, mintY, 1_000_000n, 1_000_000n);
 
-      try {
-        await depositLiquidity({
-          seed,
-          mintX,
-          mintY,
-          amountX: new BN(1_000_000),
-          amountY: new BN(1_000_000),
-          minLp: new BN(2_000_000),
-        });
-        expect.fail("expected SlippageExceeded");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/SlippageExceeded|6003|0x1773/i);
-      }
+      await expectError(
+        () =>
+          depositLiquidity({
+            seed,
+            mintX,
+            mintY,
+            amountX: new BN(1_000_000),
+            amountY: new BN(1_000_000),
+            minLp: new BN(2_000_000),
+          }),
+        /SlippageExceeded|6003|0x1773/i
+      );
     });
 
     it("rejects first deposit below MINIMUM_LIQUIDITY", async () => {
@@ -493,19 +509,18 @@ describe("amm", () => {
       });
       await fundUserAtas(mintX, mintY, 100n, 100n);
 
-      try {
-        await depositLiquidity({
-          seed,
-          mintX,
-          mintY,
-          amountX: new BN(100),
-          amountY: new BN(100),
-          minLp: new BN(0),
-        });
-        expect.fail("expected InsufficientLiquidity");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/InsufficientLiquidity|6005|0x1775/i);
-      }
+      await expectError(
+        () =>
+          depositLiquidity({
+            seed,
+            mintX,
+            mintY,
+            amountX: new BN(100),
+            amountY: new BN(100),
+            minLp: new BN(0),
+          }),
+        /InsufficientLiquidity|6005|0x1775/i
+      );
     });
   });
 
@@ -570,7 +585,10 @@ describe("amm", () => {
       return { tx, config, mintLp, vaultX, vaultY, userX, userY, userLp };
     }
 
-    async function setupPoolWithLiquidity(seed: BN, depositAmount = 1_000_000n) {
+    async function setupPoolWithLiquidity(
+      seed: BN,
+      depositAmount = 1_000_000n
+    ) {
       const [mintX, mintY] = await createPairMints();
       await initializePool({
         seed,
@@ -632,8 +650,12 @@ describe("amm", () => {
       expect(Number(userLpAfter.amount)).to.equal(
         Number(depositAmount) - MINIMUM_LIQUIDITY - burnLp
       );
-      expect(Number(vaultXAfter.amount)).to.equal(Number(depositAmount) - burnLp);
-      expect(Number(vaultYAfter.amount)).to.equal(Number(depositAmount) - burnLp);
+      expect(Number(vaultXAfter.amount)).to.equal(
+        Number(depositAmount) - burnLp
+      );
+      expect(Number(vaultYAfter.amount)).to.equal(
+        Number(depositAmount) - burnLp
+      );
       expect(Number(userXAfter.amount - userXBefore.amount)).to.equal(burnLp);
       expect(Number(userYAfter.amount - userYBefore.amount)).to.equal(burnLp);
       expect(Number(lpMint.supply)).to.equal(Number(depositAmount) - burnLp);
@@ -643,38 +665,36 @@ describe("amm", () => {
       const seed = new BN(201);
       const { mintX, mintY } = await setupPoolWithLiquidity(seed);
 
-      try {
-        await withdrawLiquidity({
-          seed,
-          mintX,
-          mintY,
-          lpAmount: new BN(100_000),
-          minX: new BN(1_000_000),
-          minY: new BN(0),
-        });
-        expect.fail("expected SlippageExceeded");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/SlippageExceeded|6003|0x1773/i);
-      }
+      await expectError(
+        () =>
+          withdrawLiquidity({
+            seed,
+            mintX,
+            mintY,
+            lpAmount: new BN(100_000),
+            minX: new BN(1_000_000),
+            minY: new BN(0),
+          }),
+        /SlippageExceeded|6003|0x1773/i
+      );
     });
 
     it("rejects withdrawing more LP than the user holds", async () => {
       const seed = new BN(202);
       const { mintX, mintY } = await setupPoolWithLiquidity(seed);
 
-      try {
-        await withdrawLiquidity({
-          seed,
-          mintX,
-          mintY,
-          lpAmount: new BN(2_000_000),
-          minX: new BN(0),
-          minY: new BN(0),
-        });
-        expect.fail("expected InsufficientLiquidity");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/InsufficientLiquidity|6005|0x1775/i);
-      }
+      await expectError(
+        () =>
+          withdrawLiquidity({
+            seed,
+            mintX,
+            mintY,
+            lpAmount: new BN(2_000_000),
+            minX: new BN(0),
+            minY: new BN(0),
+          }),
+        /InsufficientLiquidity|6005|0x1775/i
+      );
     });
 
     it("rejects burning that would drop supply below MINIMUM_LIQUIDITY", async () => {
@@ -698,24 +718,24 @@ describe("amm", () => {
       // supply now 2_000_000; user LP = 999_000 + 1_000_000 = 1_999_000
       // Max burn allowed = 2_000_000 - 1_000 = 1_999_000 (exactly leaves lock)
       // Try burn 1_999_001 → should fail
-      try {
-        await withdrawLiquidity({
-          seed,
-          mintX,
-          mintY,
-          lpAmount: new BN(1_999_001),
-          minX: new BN(0),
-          minY: new BN(0),
-        });
-        expect.fail("expected InsufficientLiquidity");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/InsufficientLiquidity|6005|0x1775/i);
-      }
+      await expectError(
+        () =>
+          withdrawLiquidity({
+            seed,
+            mintX,
+            mintY,
+            lpAmount: new BN(1_999_001),
+            minX: new BN(0),
+            minY: new BN(0),
+          }),
+        /InsufficientLiquidity|6005|0x1775/i
+      );
     });
 
     it("allows withdrawing all user LP leaving locked MINIMUM_LIQUIDITY", async () => {
       const seed = new BN(204);
-      const { mintX, mintY, userLp, depositAmount } = await setupPoolWithLiquidity(seed);
+      const { mintX, mintY, userLp, depositAmount } =
+        await setupPoolWithLiquidity(seed);
       const userLpAmount = Number(depositAmount) - MINIMUM_LIQUIDITY;
 
       await withdrawLiquidity({
@@ -829,8 +849,18 @@ describe("amm", () => {
       const seed = new BN(300);
       const { mintX, mintY } = await setupSwapPool(seed);
       const { config } = derivePoolPdas(seed);
-      const vaultX = getAssociatedTokenAddressSync(mintX, config, true, TOKEN_PROGRAM_ID);
-      const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+      const vaultX = getAssociatedTokenAddressSync(
+        mintX,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+      const vaultY = getAssociatedTokenAddressSync(
+        mintY,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
       const userY = getAssociatedTokenAddressSync(
         mintY,
         wallet.publicKey,
@@ -876,8 +906,18 @@ describe("amm", () => {
       const seed = new BN(301);
       const { mintX, mintY } = await setupSwapPool(seed);
       const { config } = derivePoolPdas(seed);
-      const vaultX = getAssociatedTokenAddressSync(mintX, config, true, TOKEN_PROGRAM_ID);
-      const vaultY = getAssociatedTokenAddressSync(mintY, config, true, TOKEN_PROGRAM_ID);
+      const vaultX = getAssociatedTokenAddressSync(
+        mintX,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+      const vaultY = getAssociatedTokenAddressSync(
+        mintY,
+        config,
+        true,
+        TOKEN_PROGRAM_ID
+      );
       const userX = getAssociatedTokenAddressSync(
         mintX,
         wallet.publicKey,
@@ -913,38 +953,36 @@ describe("amm", () => {
       const seed = new BN(302);
       const { mintX, mintY } = await setupSwapPool(seed);
 
-      try {
-        await swapTokens({
-          seed,
-          mintX,
-          mintY,
-          isX: true,
-          amountIn: new BN(10_000),
-          minOut: new BN(1_000_000),
-        });
-        expect.fail("expected SlippageExceeded");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/SlippageExceeded|6003|0x1773/i);
-      }
+      await expectError(
+        () =>
+          swapTokens({
+            seed,
+            mintX,
+            mintY,
+            isX: true,
+            amountIn: new BN(10_000),
+            minOut: new BN(1_000_000),
+          }),
+        /SlippageExceeded|6003|0x1773/i
+      );
     });
 
     it("rejects zero amount_in", async () => {
       const seed = new BN(303);
       const { mintX, mintY } = await setupSwapPool(seed);
 
-      try {
-        await swapTokens({
-          seed,
-          mintX,
-          mintY,
-          isX: true,
-          amountIn: new BN(0),
-          minOut: new BN(0),
-        });
-        expect.fail("expected InvalidAmount");
-      } catch (err: unknown) {
-        expect(errorBlob(err)).to.match(/InvalidAmount|6008|0x1778/i);
-      }
+      await expectError(
+        () =>
+          swapTokens({
+            seed,
+            mintX,
+            mintY,
+            isX: true,
+            amountIn: new BN(0),
+            minOut: new BN(0),
+          }),
+        /InvalidAmount|6008|0x1778/i
+      );
     });
 
     it("fee reduces output versus zero-fee pool", async () => {
