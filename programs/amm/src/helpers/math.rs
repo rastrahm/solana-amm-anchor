@@ -31,58 +31,102 @@ pub fn integer_sqrt(value: u128) -> Result<u64> {
     u64::try_from(x).map_err(|_| error!(AmmError::MathOverflow))
 }
 
-/// Amount of LP tokens to mint to the user for a deposit.
+/// Result of quoting a deposit against the current pool state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DepositQuote {
+    /// Token X actually pulled from the user (`<= max_x`).
+    pub amount_x: u64,
+    /// Token Y actually pulled from the user (`<= max_y`).
+    pub amount_y: u64,
+    /// LP minted to the user.
+    pub lp_to_user: u64,
+    /// True only on the first deposit, when `MINIMUM_LIQUIDITY` must be locked.
+    pub lock_minimum: bool,
+}
+
+/// Quotes a deposit: how much X/Y to pull and how much LP to mint.
 ///
-/// - First deposit (`total_lp == 0`): `sqrt(amount_x * amount_y) - MINIMUM_LIQUIDITY`
-/// - Later deposits: `min(amount_x * total_lp / reserve_x, amount_y * total_lp / reserve_y)`
+/// - First deposit (`total_lp == 0`): pulls `max_x`/`max_y` as given and mints
+///   `sqrt(max_x * max_y) - MINIMUM_LIQUIDITY`. Tokens already sitting in the vaults
+///   (direct donations to the predictable ATAs) are ignored for pricing and absorbed by
+///   the pool, so they cannot block initialization.
+/// - Later deposits: `lp = min(max_x * total_lp / reserve_x, max_y * total_lp / reserve_y)`
+///   (floor), then pulls only `ceil(lp * reserve / total_lp)` of each token. The excess of
+///   an unbalanced offer stays with the user; rounding up favors the pool.
 ///
-/// @return `(lp_to_user, lock_minimum)` where `lock_minimum` is true only on first deposit.
-pub fn lp_tokens_for_deposit(
-    amount_x: u64,
-    amount_y: u64,
+/// @param max_x Maximum token X the user is willing to deposit.
+/// @param max_y Maximum token Y the user is willing to deposit.
+/// @return `DepositQuote` with the exact amounts to transfer and LP to mint.
+pub fn deposit_quote(
+    max_x: u64,
+    max_y: u64,
     reserve_x: u64,
     reserve_y: u64,
     total_lp: u64,
-) -> Result<(u64, bool)> {
+) -> Result<DepositQuote> {
     if total_lp == 0 {
-        require!(
-            reserve_x == 0 && reserve_y == 0,
-            AmmError::InsufficientLiquidity
-        );
-
-        let product = (amount_x as u128)
-            .checked_mul(amount_y as u128)
+        let product = (max_x as u128)
+            .checked_mul(max_y as u128)
             .ok_or(AmmError::MathOverflow)?;
         let liquidity = integer_sqrt(product)?;
         require!(
             liquidity > MINIMUM_LIQUIDITY,
             AmmError::InsufficientLiquidity
         );
-        let user_lp = liquidity
+        let lp_to_user = liquidity
             .checked_sub(MINIMUM_LIQUIDITY)
             .ok_or(AmmError::MathOverflow)?;
-        Ok((user_lp, true))
+        return Ok(DepositQuote {
+            amount_x: max_x,
+            amount_y: max_y,
+            lp_to_user,
+            lock_minimum: true,
+        });
+    }
+
+    require!(
+        reserve_x > 0 && reserve_y > 0,
+        AmmError::InsufficientLiquidity
+    );
+
+    let total = total_lp as u128;
+    let lp_from_x = (max_x as u128)
+        .checked_mul(total)
+        .ok_or(AmmError::MathOverflow)?
+        .checked_div(reserve_x as u128)
+        .ok_or(AmmError::MathOverflow)?;
+    let lp_from_y = (max_y as u128)
+        .checked_mul(total)
+        .ok_or(AmmError::MathOverflow)?
+        .checked_div(reserve_y as u128)
+        .ok_or(AmmError::MathOverflow)?;
+    let lp = lp_from_x.min(lp_from_y);
+    require!(lp > 0, AmmError::InsufficientLiquidity);
+
+    let amount_x = ceil_mul_div(lp, reserve_x as u128, total)?;
+    let amount_y = ceil_mul_div(lp, reserve_y as u128, total)?;
+
+    Ok(DepositQuote {
+        amount_x: u64::try_from(amount_x).map_err(|_| error!(AmmError::MathOverflow))?,
+        amount_y: u64::try_from(amount_y).map_err(|_| error!(AmmError::MathOverflow))?,
+        lp_to_user: u64::try_from(lp).map_err(|_| error!(AmmError::MathOverflow))?,
+        lock_minimum: false,
+    })
+}
+
+/// `ceil(a * b / denominator)` with checked `u128` arithmetic.
+fn ceil_mul_div(a: u128, b: u128, denominator: u128) -> Result<u128> {
+    require!(denominator > 0, AmmError::MathOverflow);
+    let product = a.checked_mul(b).ok_or(AmmError::MathOverflow)?;
+    let quotient = product
+        .checked_div(denominator)
+        .ok_or(AmmError::MathOverflow)?;
+    if product % denominator == 0 {
+        Ok(quotient)
     } else {
-        require!(
-            reserve_x > 0 && reserve_y > 0,
-            AmmError::InsufficientLiquidity
-        );
-
-        let lp_from_x = (amount_x as u128)
-            .checked_mul(total_lp as u128)
-            .ok_or(AmmError::MathOverflow)?
-            .checked_div(reserve_x as u128)
-            .ok_or(AmmError::MathOverflow)?;
-        let lp_from_y = (amount_y as u128)
-            .checked_mul(total_lp as u128)
-            .ok_or(AmmError::MathOverflow)?
-            .checked_div(reserve_y as u128)
-            .ok_or(AmmError::MathOverflow)?;
-
-        let liquidity = lp_from_x.min(lp_from_y);
-        let user_lp = u64::try_from(liquidity).map_err(|_| error!(AmmError::MathOverflow))?;
-        require!(user_lp > 0, AmmError::InsufficientLiquidity);
-        Ok((user_lp, false))
+        quotient
+            .checked_add(1)
+            .ok_or(error!(AmmError::MathOverflow))
     }
 }
 
@@ -224,22 +268,62 @@ mod tests {
 
     #[test]
     fn first_deposit_locks_minimum_liquidity() {
-        let (user_lp, lock) = lp_tokens_for_deposit(1_000_000, 1_000_000, 0, 0, 0).unwrap();
-        assert!(lock);
-        assert_eq!(user_lp, 1_000_000 - MINIMUM_LIQUIDITY);
+        let q = deposit_quote(1_000_000, 1_000_000, 0, 0, 0).unwrap();
+        assert!(q.lock_minimum);
+        assert_eq!(q.lp_to_user, 1_000_000 - MINIMUM_LIQUIDITY);
+        assert_eq!((q.amount_x, q.amount_y), (1_000_000, 1_000_000));
+    }
+
+    #[test]
+    fn first_deposit_ignores_pre_existing_donations() {
+        // Attacker pre-funds the predictable vault ATA before the first deposit.
+        let q = deposit_quote(1_000_000, 1_000_000, 1, 0, 0).unwrap();
+        assert!(q.lock_minimum);
+        assert_eq!(q.lp_to_user, 1_000_000 - MINIMUM_LIQUIDITY);
+
+        let q = deposit_quote(1_000_000, 1_000_000, 7, 9_999, 0).unwrap();
+        assert_eq!(q.lp_to_user, 1_000_000 - MINIMUM_LIQUIDITY);
     }
 
     #[test]
     fn first_deposit_rejects_tiny_liquidity() {
-        assert!(lp_tokens_for_deposit(10, 10, 0, 0, 0).is_err());
+        assert!(deposit_quote(10, 10, 0, 0, 0).is_err());
     }
 
     #[test]
     fn subsequent_deposit_is_proportional() {
-        let (user_lp, lock) =
-            lp_tokens_for_deposit(500_000, 500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
-        assert!(!lock);
-        assert_eq!(user_lp, 500_000);
+        let q = deposit_quote(500_000, 500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
+        assert!(!q.lock_minimum);
+        assert_eq!(q.lp_to_user, 500_000);
+        assert_eq!((q.amount_x, q.amount_y), (500_000, 500_000));
+    }
+
+    #[test]
+    fn unbalanced_deposit_only_pulls_the_pool_ratio() {
+        // 1:1 pool, user offers 100k X + 500k Y → only 100k Y is taken.
+        let q = deposit_quote(100_000, 500_000, 1_000_000, 1_000_000, 1_000_000).unwrap();
+        assert_eq!(q.lp_to_user, 100_000);
+        assert_eq!((q.amount_x, q.amount_y), (100_000, 100_000));
+
+        // Y is the scarce side: 1:2 pool (X:Y), offer 900k X + 200k Y → 100k X.
+        let q = deposit_quote(900_000, 200_000, 1_000_000, 2_000_000, 1_000_000).unwrap();
+        assert_eq!(q.lp_to_user, 100_000);
+        assert_eq!((q.amount_x, q.amount_y), (100_000, 200_000));
+    }
+
+    #[test]
+    fn deposit_rounds_pulled_amounts_up_and_never_exceeds_max() {
+        // reserves 3:7, total 5 → non-integer ratios exercise ceil rounding.
+        let (rx, ry, total) = (3_000_001u64, 7_000_003u64, 5_000_000u64);
+        for (max_x, max_y) in [(1u64, 1_000u64), (12_345, 99_999), (1_000_000, 1)] {
+            let Ok(q) = deposit_quote(max_x, max_y, rx, ry, total) else {
+                continue;
+            };
+            assert!(q.amount_x <= max_x && q.amount_y <= max_y);
+            // Value contributed per LP is never below the pool's current value per LP.
+            assert!(q.amount_x as u128 * total as u128 >= q.lp_to_user as u128 * rx as u128);
+            assert!(q.amount_y as u128 * total as u128 >= q.lp_to_user as u128 * ry as u128);
+        }
     }
 
     #[test]

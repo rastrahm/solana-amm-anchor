@@ -35,13 +35,13 @@ cargo build-sbf -p amm
 ## Tests
 
 ```bash
-# On-chain suite (local validator + 28 amm + security tests)
+# On-chain suite (local validator + 37 amm + security tests)
 anchor test
 
-# Math / host unit tests only
+# Math / host unit tests only (16 tests)
 cargo test -p amm
 
-# Frontend
+# Frontend (14 Vitest tests)
 npm run app:test
 ```
 
@@ -61,6 +61,8 @@ anchor localnet   # or: solana-test-validator &
 anchor deploy
 ```
 
+Pool mints must be created **without** a freeze authority (`spl-token create-token` only sets one with `--enable-freeze`) and, for Token-2022, without balance-altering extensions.
+
 Copy the generated IDL into the app if you change the interface:
 
 ```bash
@@ -73,9 +75,11 @@ cp target/types/amm.ts app/src/lib/idl/  # if applicable
 | Instruction | Key parameters | Notes |
 |-------------|----------------|-------|
 | `initialize` | `seed`, `fee` (bps), `authority?` | Creates the Config PDA, LP mint, and vault ATAs |
-| `deposit` | `amount_x`, `amount_y`, `min_lp` | First deposit locks `MINIMUM_LIQUIDITY` (1000) |
+| `deposit` | `max_x`, `max_y`, `min_lp` | First deposit locks `MINIMUM_LIQUIDITY` (1000); later deposits only pull the pool ratio |
 | `withdraw` | `lp_amount`, `min_x`, `min_y` | Floor division in favor of the pool |
 | `swap` | `is_x`, `amount_in`, `min_amount_out` | Fee on input; invariant `(x+Δin_fee)·(y-Δout) ≥ k` |
+| `set_locked` | `locked` | `config.authority` only; pauses deposit/swap, withdraw always open |
+| `set_authority` | `new_authority?` | `config.authority` only; `None` renounces forever |
 
 ## Next.js client
 
@@ -101,6 +105,10 @@ See `app/README.md`.
 - Typed accounts with Anchor discriminators; canonical bumps stored in `Config`
 - No vault/mint aliasing; CPI only through `Interface<TokenInterface>`
 - `checked_*` arithmetic on `u128`; mandatory slippage bounds on deposit/withdraw/swap
-- Minimum liquidity locked on the first deposit (anti share-inflation)
+- Minimum liquidity locked on the first deposit (anti share-inflation); prior donations to the vault cannot brick the pool
+- Mints without a `freeze_authority` (`MintHasFreezeAuthority`), so nobody can freeze a vault
+- Unbalanced deposits: only the pool ratio is pulled; the excess stays in the wallet
+- Optional admin: pauses deposit/swap without being able to block withdrawals; transferable or renounceable
+- Token-2022: only mints without extensions or with metadata/group extensions. TransferFee, PermanentDelegate, TransferHook and other extensions that alter balances or custody are rejected (`UnsupportedMintExtension`)
 
 Details and traceability to tests: [`doc/auditoria-EN.md`](doc/auditoria-EN.md).

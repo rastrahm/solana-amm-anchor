@@ -34,7 +34,7 @@ pub struct Config {
     pub seed: u64,
     /// Swap fee in basis points (1 bps = 0.01%). Must be `<= MAX_FEE_BPS`.
     pub fee: u16,
-    /// When `true`, deposits / swaps / withdraws that mutate pool state are rejected.
+    /// When `true`, deposits and swaps are rejected; withdrawals always remain open.
     pub locked: bool,
     /// Canonical bump for the Config PDA.
     pub config_bump: u8,

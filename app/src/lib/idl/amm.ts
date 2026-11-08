@@ -22,8 +22,8 @@ export type Amm = {
         "@notice Deposits X/Y liquidity and mints LP tokens to the user.",
         "@dev Locks `MINIMUM_LIQUIDITY` on the first deposit; enforces `min_lp` slippage.",
         "@param ctx Accounts context (`Deposit`).",
-        "@param amount_x Amount of token X to deposit.",
-        "@param amount_y Amount of token Y to deposit.",
+        "@param max_x Maximum token X to deposit (only the pool ratio is pulled).",
+        "@param max_y Maximum token Y to deposit (only the pool ratio is pulled).",
         "@param min_lp Minimum acceptable LP minted (slippage protection).",
         "@return Result<()> Ok when the deposit completes."
       ],
@@ -498,11 +498,11 @@ export type Amm = {
       ],
       "args": [
         {
-          "name": "amountX",
+          "name": "maxX",
           "type": "u64"
         },
         {
-          "name": "amountY",
+          "name": "maxY",
           "type": "u64"
         },
         {
@@ -650,6 +650,130 @@ export type Amm = {
           "type": {
             "option": "pubkey"
           }
+        }
+      ]
+    },
+    {
+      "name": "setAuthority",
+      "docs": [
+        "@notice Transfers or renounces (`None`) the pool admin authority.",
+        "@param ctx Accounts context (`UpdateConfig`); signer must be `config.authority`.",
+        "@param new_authority Next admin, or `None` to make the pool immutable forever.",
+        "@return Result<()> Ok when the authority is stored."
+      ],
+      "discriminator": [
+        133,
+        250,
+        37,
+        21,
+        110,
+        163,
+        26,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Current pool admin."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Pool config PDA. Uses the stored canonical bump."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.seed",
+                "account": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "newAuthority",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setLocked",
+      "docs": [
+        "@notice Pauses or resumes deposits and swaps (withdrawals always stay open).",
+        "@param ctx Accounts context (`UpdateConfig`); signer must be `config.authority`.",
+        "@param locked `true` to pause, `false` to resume.",
+        "@return Result<()> Ok when the flag is stored."
+      ],
+      "discriminator": [
+        157,
+        3,
+        48,
+        56,
+        31,
+        212,
+        242,
+        88
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Current pool admin."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Pool config PDA. Uses the stored canonical bump."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.seed",
+                "account": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "locked",
+          "type": "bool"
         }
       ]
     },
@@ -1469,6 +1593,16 @@ export type Amm = {
       "code": 6008,
       "name": "invalidAmount",
       "msg": "Invalid amount"
+    },
+    {
+      "code": 6009,
+      "name": "unsupportedMintExtension",
+      "msg": "Mint has an unsupported Token-2022 extension"
+    },
+    {
+      "code": 6010,
+      "name": "mintHasFreezeAuthority",
+      "msg": "Mint has a freeze authority"
     }
   ],
   "types": [
@@ -1531,7 +1665,7 @@ export type Amm = {
           {
             "name": "locked",
             "docs": [
-              "When `true`, deposits / swaps / withdraws that mutate pool state are rejected."
+              "When `true`, deposits and swaps are rejected; withdrawals always remain open."
             ],
             "type": "bool"
           },

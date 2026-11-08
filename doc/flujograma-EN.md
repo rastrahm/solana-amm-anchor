@@ -18,10 +18,14 @@ flowchart TD
     D -->|no| E3[/AmmError::InvalidFee/]
     D -->|yes| F[init Config PDA space = ACCOUNT_SPACE 150]
     F --> G[init LP Mint mint_authority = Config]
-    G --> H[Create X/Y vault ATAs authority = Config]
-    H --> I{vault_x ≠ vault_y?}
+    G --> I{vault_x ≠ vault_y?}
     I -->|no| E4[/AmmError::IdenticalVaults/]
-    I -->|yes| J[Store canonical bumps + authority + fee]
+    I -->|yes| FZ{Mints without freeze_authority?}
+    FZ -->|no| E6[/AmmError::MintHasFreezeAuthority/]
+    FZ -->|yes| X{Token-2022 mint extensions in allowlist?}
+    X -->|no| E5[/AmmError::UnsupportedMintExtension/]
+    X -->|yes| H[Create X/Y vault ATAs authority = Config]
+    H --> J[Store canonical bumps + authority + fee]
     J --> K([Ok])
 ```
 
@@ -36,14 +40,16 @@ flowchart TD
     B -->|no| E1[/Missing signer/]
     B -->|yes| C{Account owners + Config seeds/bump OK?}
     C -->|no| E2[/Constraint / Unauthorized/]
-    C -->|yes| D{amount_x and amount_y > 0?}
+    C -->|yes| PL{Pool paused config.locked?}
+    PL -->|yes| E6[/PoolLocked/]
+    PL -->|no| D{max_x and max_y > 0?}
     D -->|no| E3[/InvalidAmount/]
-    D -->|yes| E{Current reserves = 0?}
-    E -->|yes, first deposit| F[LP = sqrt amount_x · amount_y]
+    D -->|yes| E{LP supply = 0?<br/>vault donations ignored}
+    E -->|yes, first deposit| F[LP = sqrt max_x · max_y<br/>pulls max_x, max_y]
     F --> G{LP > MINIMUM_LIQUIDITY?}
     G -->|no| E4[/InsufficientLiquidity/]
     G -->|yes| H[Mint LP; lock MINIMUM_LIQUIDITY]
-    E -->|no| I[LP = min of ratios with checked u128]
+    E -->|no| I[LP = min of ratios floor<br/>pulls ceil LP · reserve / supply<br/>excess stays with the user]
     I --> J{LP >= min_lp slippage?}
     H --> J
     J -->|no| E5[/SlippageExceeded/]
@@ -74,6 +80,8 @@ flowchart TD
     I --> J([Ok])
 ```
 
+> `withdraw` does not check `config.locked`: a pause can never trap LP funds.
+
 ---
 
 ## 4. swap
@@ -86,7 +94,9 @@ flowchart TD
     C -->|no| E2[/Arbitrary CPI rejected/]
     C -->|yes| D{vault_x ≠ vault_y and ATAs consistent?}
     D -->|no| E3[/IdenticalVaults / invalid accounts/]
-    D -->|yes| E{amount_in > 0?}
+    D -->|yes| PL{Pool paused config.locked?}
+    PL -->|yes| E7[/PoolLocked/]
+    PL -->|no| E{amount_in > 0?}
     E -->|no| E4[/InvalidAmount/]
     E -->|yes| F[amount_in_after_fee = apply fee_bps]
     F --> G[Δout = reserve_out · ain_fee / reserve_in + ain_fee]
@@ -101,7 +111,23 @@ flowchart TD
 
 ---
 
-## 5. Cross-cutting security path (every state-mutating instruction)
+## 5. set_locked / set_authority (admin)
+
+```mermaid
+flowchart TD
+    A([Start set_locked / set_authority]) --> B{authority is Signer?}
+    B -->|no| E1[/Missing signer/]
+    B -->|yes| C{Config seeds + bump OK?}
+    C -->|no| E2[/ConstraintSeeds/]
+    C -->|yes| D{config.authority == Some signer?}
+    D -->|no / pool without admin| E3[/AmmError::Unauthorized/]
+    D -->|yes| F[set_locked: store locked<br/>set_authority: store new admin or None irreversible]
+    F --> G([Ok])
+```
+
+---
+
+## 6. Cross-cutting security path (every state-mutating instruction)
 
 ```mermaid
 flowchart TD
@@ -130,4 +156,8 @@ flowchart TD
 | Arbitrary CPI | `Interface<'info, TokenInterface>` |
 | SlippageExceeded | `min_out` / `min_lp` / `min_x|y` |
 | First deposit inflation | `MINIMUM_LIQUIDITY` lock |
+| Unbalanced deposit | Only the pool ratio is pulled (`deposit_quote`) |
+| PoolLocked | Admin pause on deposit/swap; withdraw always open |
+| Unauthorized | `config.authority == Some(signer)` on admin instructions |
+| MintHasFreezeAuthority / UnsupportedMintExtension | Mint policy in `initialize` |
 | Overflow | `checked_*` + `u128` |

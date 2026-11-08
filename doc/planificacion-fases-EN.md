@@ -35,6 +35,7 @@ I authorize Phase N — <name>
 | 6 | Sealevel security suite | COMPLETED | YES | YES |
 | 7 | Next.js client / frontend | COMPLETED | YES | YES |
 | 8 | Hardening, final docs, and audit checklist | COMPLETED | YES | YES |
+| 9 | Post-audit security hardening | COMPLETED (pending sign-off) | YES | YES |
 
 ---
 
@@ -75,7 +76,7 @@ I authorize Phase N — <name>
 - [x] Fields ordered by descending size: `authority` → `mint_*` → `seed` → `fee` → `locked` / bumps
 - [x] Exact space: `Config::ACCOUNT_SPACE = 8 + Config::INIT_SPACE` (= 150)
 - [x] Canonical bumps: `config_bump`, `lp_bump`
-- [x] `AmmError` (`#[error_code]`): IdenticalVaults, IdenticalMints, InvalidFee, SlippageExceeded, MathOverflow, InsufficientLiquidity, Unauthorized, PoolLocked, InvalidAmount
+- [x] `AmmError` (`#[error_code]`): IdenticalVaults, IdenticalMints, InvalidFee, SlippageExceeded, MathOverflow, InsufficientLiquidity, Unauthorized, PoolLocked, InvalidAmount, UnsupportedMintExtension, MintHasFreezeAuthority
 
 **Acceptance criteria:**
 - [x] Rust test: `INIT_SPACE == 142` and `ACCOUNT_SPACE == 8 + INIT_SPACE`
@@ -272,10 +273,38 @@ I authorize Phase N — <name>
 
 ---
 
+## Phase 9 — Post-audit security hardening
+
+**Goal:** close the vectors found while reviewing how the modules work internally.
+
+**Status:** COMPLETED, pending sign-off (authorized 2026-11-08)
+
+**Deliverables (TDD: red test reproducing the attack → fix → green):**
+- [x] Donation griefing: the first deposit ignores pre-existing vault balances (previously the pool was bricked forever)
+- [x] Token-2022: mint extension allowlist (metadata/group only) → `UnsupportedMintExtension`
+- [x] Freeze authority: mints with a `freeze_authority` are rejected → `MintHasFreezeAuthority`
+- [x] Unbalanced deposits: `deposit(max_x, max_y, min_lp)` + `deposit_quote`; only the pool ratio is pulled (rounded up in favor of the pool)
+- [x] Admin: `set_locked` and `set_authority` (`UpdateConfig`, `config.authority` only); pauses deposit/swap, `withdraw` is never blocked; renounce with `None`
+- [x] Test suite: `errorBlob` rethrows `AssertionError` so an `expect.fail` is not swallowed by the `catch` (there were false positives)
+- [x] IDL copied to the app; "Max X / Max Y" labels and ES/EN help updated
+- [x] ES/EN docs (README, audit §1/§3/§4/§6, diagrams, flowcharts)
+
+**Acceptance criteria:**
+- [x] `anchor test` green (37 passing)
+- [x] `cargo test -p amm` (16 tests) · `cargo clippy -D warnings` · `cargo fmt --check`
+- [x] App: `tsc --noEmit` + Vitest (14 tests)
+
+**Known trade-off:** stablecoins with a freeze authority (e.g. USDC) cannot be listed.
+
+**Dependencies:** Phase 8  
+**Authorization required:** yes (granted in chat)
+
+---
+
 ## Suggested work order (summary)
 
 ```text
-Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 optional] → 8
+Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 optional] → 8 → 9
           ↑
    authorize one at a time
 ```

@@ -104,7 +104,7 @@ pub(crate) fn handler(
     min_x: u64,
     min_y: u64,
 ) -> Result<()> {
-    require!(!ctx.accounts.config.locked, AmmError::PoolLocked);
+    // `config.locked` is intentionally not checked: a pause must never trap LP funds.
     require!(lp_amount > 0, AmmError::InvalidAmount);
     require!(
         ctx.accounts.user_lp.amount >= lp_amount,
