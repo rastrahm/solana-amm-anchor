@@ -4,7 +4,7 @@
 
 Final matrix (Phase 8) mapping Sealevel / Solana security course mitigations ↔ implementation ↔ tests.
 
-**Program:** `programs/amm` · **Suite:** `tests/amm.ts` + `tests/security.ts` (37 passing) · **Lint:** `cargo fmt` + `cargo clippy -D warnings`
+**Program:** `programs/amm` · **Suite:** `tests/amm.ts` + `tests/security.ts` (39 passing) · **Lint:** `cargo fmt` + `cargo clippy -D warnings`
 
 ---
 
@@ -79,7 +79,7 @@ Operational recommendation: measure with `getTransaction` / validator logs after
 - [x] `cargo clippy -p amm --lib --tests -- -D warnings`
 - [x] Root README + diagrams aligned
 - [x] This audit matrix
-- [x] `anchor test` green (37 passing)
+- [x] `anchor test` green (39 passing)
 - [x] Human sign-off on closeout (2026-09-22)
 
 **No pending security TODOs in the program tree.**
@@ -99,3 +99,30 @@ Second round (also TDD):
 - **Unbalanced deposits:** `deposit(max_x, max_y, min_lp)` computes LP from the scarce side and pulls only `ceil(lp · reserve / supply)` of each token (rounding in favor of the pool). The excess stays in the user's wallet.
 - **Admin:** new `set_locked` and `set_authority` instructions, restricted to `config.authority`. The pause affects deposit/swap; `withdraw` no longer checks `locked`, so an admin cannot trap funds. `set_authority(None)` renounces irreversibly.
 - **Freeze authority:** `initialize` rejects mints with a `freeze_authority` (`MintHasFreezeAuthority`). Consequence: stablecoins with a freeze authority (e.g. USDC) cannot be listed.
+
+---
+
+## 7. Test quality (mutation testing)
+
+A mutant is a copy of the program with a deliberately injected bug. If no test fails, the mutant "survives" and exposes a gap in the suite.
+
+| Scope | Tool | Mutants | Caught | Survived |
+|-------|------|---------|--------|----------|
+| `helpers/math.rs` | `cargo mutants` + 22 tests (16 unit + 6 `proptest`) | 23 | 20 + 2 timeouts (1 unviable) | 0 |
+| On-chain validations (`require!` / `constraint`) | `scripts/mutation-onchain.py` + `anchor test` | 23 | 13 (1 by timeout) | 10 equivalent |
+
+Real gaps found and closed with new tests:
+
+- `withdraw.rs` — `user_lp.amount >= lp_amount`: the existing test asked for more LP than the total supply, so the math stopped it. New test: a second LP tries to burn more than it holds, within what the pool can pay.
+- `initialize.rs` — `vault_x != vault_y`: there was no test. New test with the same vault in both slots → `IdenticalVaults`.
+
+Equivalent survivors (an earlier validation rejects the same case; kept as defense in depth):
+
+| Validation | Why it is unreachable |
+|------------|-----------------------|
+| `vault_x != vault_y` in deposit / swap / withdraw | `associated_token::mint` forces each vault to be its mint's ATA; mints differ, so addresses cannot match |
+| `user_x != user_y` in deposit / swap / withdraw | Same with the user ATAs |
+| Canonical ATA `require_keys_eq!` in `initialize` | The ATA program already refuses to create an account at a non-canonical address |
+| `amount_in > 0` (swap) and `lp_amount > 0` (withdraw) | `amount_out_for_swap` / `amounts_for_withdraw` repeat the check with the same error |
+
+Also, `errorBlob` rethrows `AssertionError` and every negative test uses `expectError(action, /Pattern/)`, which removes the false positives of the `try { …; expect.fail() } catch` pattern.

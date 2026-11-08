@@ -55,6 +55,24 @@ Build a production-grade constant-product AMM (x * y = k) in Solana using Rust, 
 - **LP Token Dilution / Inflation Attack:** Lock minimum liquidity (e.g., 1000 LP tokens) during the initial pool deposit (`Initialize` / `First Deposit`) by burning them or locking them in a un-spendable PDA to prevent first-depositor share manipulation attacks.
 - **Slippage Bounds:** Require `min_amount_out` or `max_amount_in` parameters on `swap` and `withdraw` instructions to protect against MEV front-running / sandwich attacks.
 
+### H. Out-of-Band State & Griefing
+- **Donations to predictable accounts:** Vault ATAs are derivable by anyone. Never require `vault.amount == 0` (or any exact balance) as a precondition; anyone can transfer tokens in and brick the instruction. First-deposit LP must depend only on the amounts supplied.
+- **Reserves read from `vault.amount`:** Assume vault balances can grow without the program's involvement. Logic must stay correct (and never favor an attacker) when reserves exceed internal accounting.
+
+### I. Mint Admission Policy (SPL Token / Token-2022)
+- **Freeze authority:** Reject mints with `freeze_authority.is_some()`; the holder could freeze a vault and brick swaps/withdrawals for every LP.
+- **Token-2022 extensions:** `token_interface` compatibility is NOT safety. Allowlist only descriptive extensions (MetadataPointer, TokenMetadata, Group*). Reject TransferFeeConfig, PermanentDelegate, TransferHook, DefaultAccountState, NonTransferable, ConfidentialTransfer* and any unknown extension.
+- **Validate mints once, at `initialize`,** before creating vaults.
+
+### J. Deposit Ratio & Value Extraction
+- **Unbalanced deposits:** Treat deposit amounts as maximums. Compute LP from the scarce side and pull only `ceil(lp * reserve / supply)` of each token; never silently take the excess.
+- **Rounding direction:** Every rounding (LP minted, tokens pulled, tokens returned, swap output) must favor the pool, never the caller.
+
+### K. Admin Powers & Dead State
+- **No dead state:** Every `Config` field must be read or written by at least one instruction. A field with no instruction using it is a bug or a missing feature, and must be flagged.
+- **Admin scope:** Admin instructions require `config.authority == Some(signer)`; `None` means immutable forever. Admin must never be able to move funds or block withdrawals: a pause (`locked`) only disables deposits and swaps.
+- **Authority lifecycle:** Provide explicit transfer and irreversible renounce (`set_authority(None)`).
+
 ---
 
 ## 4. CODING & MATHEMATICAL SECURITY RULES
@@ -74,3 +92,14 @@ Build a production-grade constant-product AMM (x * y = k) in Solana using Rust, 
 - **Duplicate Account Test:** Verify rejection when `vault_x` and `vault_y` point to the same account address.
 - **First-Deposit Inflation Test:** Test edge cases with $1$ lamport/token initial liquidity deposits to confirm rounding down does not drain reserves.
 - **Rent Exemption & Allocation Benchmark:** Validate that allocated space matches `8 + Config::INIT_SPACE` without extra padding overhead.
+- **Donation Griefing Test:** Transfer tokens directly into an empty vault before the first deposit; the first deposit must still succeed.
+- **Hostile Mint Fixtures:** Test `initialize` with a freezable mint, a Token-2022 TransferFee mint and a PermanentDelegate mint; all must be rejected.
+- **Unbalanced Deposit Test:** Offer an off-ratio deposit and assert only the pool ratio is pulled from the user.
+- **Admin Tests:** Non-authority and no-authority pools reject admin calls; a paused pool still allows withdrawals.
+
+### Test Quality Gates
+- **Red before green:** Every security test must be observed failing against the unpatched code before the fix lands. A test that was never red proves nothing.
+- **Negative tests use `expectError(action, /Pattern/)`:** Never write `try { ...; expect.fail() } catch { expect(...).to.match() }` by hand; the `catch` can swallow the `expect.fail` and produce a false positive.
+- **Property tests:** Math invariants (`helpers/math.rs`) are covered with `proptest`: deposits never exceed maxima, value per LP never decreases, `k` never decreases on swaps, withdrawals never return more than the proportional share.
+- **Mutation testing:** Run `cargo mutants -p amm --file programs/amm/src/helpers/math.rs` after changing math, and `python3 scripts/mutation-onchain.py` after changing instruction validations. Every surviving mutant needs a new test or a written justification in `doc/auditoria-*.md` §7.
+- **Adversarial review:** Security-sensitive phases get an independent review (different agent/model or human) prompted to "steal funds, brick the pool or dilute LPs", not to tick this checklist.

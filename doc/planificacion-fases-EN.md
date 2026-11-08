@@ -287,11 +287,15 @@ I authorize Phase N — <name>
 - [x] Admin: `set_locked` and `set_authority` (`UpdateConfig`, `config.authority` only); pauses deposit/swap, `withdraw` is never blocked; renounce with `None`
 - [x] Test suite: `errorBlob` rethrows `AssertionError` so an `expect.fail` is not swallowed by the `catch` (there were false positives)
 - [x] IDL copied to the app; "Max X / Max Y" labels and ES/EN help updated
-- [x] ES/EN docs (README, audit §1/§3/§4/§6, diagrams, flowcharts)
+- [x] ES/EN docs (README, audit §1/§3/§4/§6/§7, diagrams, flowcharts)
+- [x] `.cursorrules`: vectors H–K (donations, mint policy, deposit ratio, admin powers) and "Test Quality Gates"
+- [x] `proptest`: 6 properties over the math (deposit, withdraw, swap, sqrt, no-profit round trip)
+- [x] Mutation testing: `cargo mutants` (math, 0 survivors) and `scripts/mutation-onchain.py` (on-chain validations; 2 gaps closed, 10 equivalent justified)
+- [x] `expectError` helper in every negative test
 
 **Acceptance criteria:**
-- [x] `anchor test` green (37 passing)
-- [x] `cargo test -p amm` (16 tests) · `cargo clippy -D warnings` · `cargo fmt --check`
+- [x] `anchor test` green (39 passing)
+- [x] `cargo test -p amm` (22 tests) · `cargo clippy -D warnings` · `cargo fmt --check`
 - [x] App: `tsc --noEmit` + Vitest (14 tests)
 
 **Known trade-off:** stablecoins with a freeze authority (e.g. USDC) cannot be listed.
