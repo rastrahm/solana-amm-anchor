@@ -40,4 +40,12 @@ pub enum AmmError {
     /// @notice Amount argument is zero or otherwise invalid.
     #[msg("Invalid amount")]
     InvalidAmount,
+
+    /// @notice Token-2022 mint carries an extension that breaks vault accounting or custody.
+    #[msg("Mint has an unsupported Token-2022 extension")]
+    UnsupportedMintExtension,
+
+    /// @notice Mint has a freeze authority that could freeze the pool vaults.
+    #[msg("Mint has a freeze authority")]
+    MintHasFreezeAuthority,
 }

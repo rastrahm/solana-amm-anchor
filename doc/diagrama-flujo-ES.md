@@ -58,17 +58,19 @@ flowchart TB
     subgraph Init["initialize"]
         I1[Initializer firma + paga rent] --> I2[Crear Config PDA]
         I2 --> I3[Crear Mint LP]
-        I3 --> I4[Crear Vault ATAs X/Y tras checks]
+        I3 --> IP[Política de mints: sin freeze_authority, extensiones Token-2022 en allowlist]
+        IP --> I4[Crear Vault ATAs X/Y tras checks]
         I4 --> I5[Persistir fee, authority, bumps]
     end
 
     subgraph Dep["deposit"]
-        D1[User transfiere X e Y a vaults] --> D2[Calcular LP con u128]
-        D2 --> D3{¿Primer depósito?}
-        D3 -->|sí| D4[Acuñar LP − lock mínimo]
-        D3 -->|no| D5[Acuñar LP proporcional]
-        D4 --> D6[Enviar LP a user o burn lock]
-        D5 --> D6
+        D0[User ofrece max_x, max_y] --> D2[deposit_quote con u128]
+        D2 --> D3{¿Supply LP = 0?}
+        D3 -->|sí| D4[Cobra max_x, max_y; LP = √xy − lock mínimo]
+        D3 -->|no| D5[LP por el lado escaso; cobra ceil de la proporción]
+        D4 --> D1[transfer_checked user → vaults]
+        D5 --> D1
+        D1 --> D6[mint_to LP al user y lock en el primer depósito]
     end
 
     subgraph Wdr["withdraw"]
@@ -84,9 +86,18 @@ flowchart TB
         S4 --> S5[transfer_checked in/out]
     end
 
+    subgraph Adm["set_locked / set_authority"]
+        A1[config.authority firma] --> A2{¿Some signer?}
+        A2 -->|sí| A3[Pausa deposit/swap o transfiere/renuncia admin]
+        A2 -->|no| A4[Unauthorized]
+    end
+
     Init --> Dep
     Dep --> Wdr
     Dep --> Swp
+    Init --> Adm
+    Adm -.->|PoolLocked| Dep
+    Adm -.->|PoolLocked| Swp
 ```
 
 ## Límites de confianza
@@ -94,5 +105,7 @@ flowchart TB
 | Capa | Confía en | No confía en |
 |------|-----------|--------------|
 | Cliente | UX, serialización de args | Validación de seguridad |
-| Programa | Constraints Anchor, PDA bumps guardados | Cuentas sin `owner`/discriminator |
+| Programa | Constraints Anchor, PDA bumps guardados | Cuentas sin `owner`/discriminator; saldos previos del vault en el primer depósito |
+| Mints | SPL Token / Token-2022 sin freeze authority ni extensiones peligrosas | Freeze authority, transfer fee, delegado permanente, hooks |
+| Admin | Solo puede pausar deposit/swap o ceder el rol | Nunca puede bloquear retiros ni mover fondos |
 | Token program | Interfaces validadas | Program IDs arbitrarios (anti arbitrary CPI) |

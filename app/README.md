@@ -15,7 +15,7 @@ Open http://localhost:3000
 
 1. Local validator / Anchor workspace deployed (`anchor localnet` or `anchor test --skip-deploy` with a running validator and program deployed).
 2. Browser wallet (Phantom) funded on the same cluster.
-3. SPL mints created for the pool pair; paste their addresses into **Active mints**.
+3. SPL mints created for the pool pair **without a freeze authority** (Token-2022 mints only with metadata/group extensions); paste their addresses into **Active mints**.
 
 ## Scripts
 
@@ -28,3 +28,6 @@ Open http://localhost:3000
 ## Flow
 
 Connect wallet → Initialize (seed, fee, mints) → Deposit → Swap / Withdraw.
+
+- **Deposit:** "Max X / Max Y" are upper bounds. After the first deposit the program only pulls the pool ratio; the excess stays in the wallet.
+- **PoolLocked:** the pool admin paused deposits and swaps (`set_locked`). Withdrawals always remain available.

@@ -10,7 +10,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { expect } from "chai";
+import { AssertionError, expect } from "chai";
 import { Amm } from "../target/types/amm";
 
 /**
@@ -33,6 +33,8 @@ describe("amm", () => {
   const wallet = provider.wallet as anchor.Wallet;
 
   function errorBlob(err: unknown): string {
+    // An `expect.fail` thrown inside `try` must not be matched (and swallowed) by the `catch`.
+    if (err instanceof AssertionError) throw err;
     const anchorErr = err as {
       message?: string;
       logs?: string[];
@@ -311,7 +313,7 @@ describe("amm", () => {
         });
         expect.fail("expected second initialize to fail");
       } catch (err: unknown) {
-        expect(err).to.exist;
+        expect(errorBlob(err)).to.match(/already in use|custom program error: 0x0/i);
       }
     });
 

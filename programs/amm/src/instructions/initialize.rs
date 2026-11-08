@@ -7,6 +7,7 @@ use anchor_spl::{
 };
 
 use crate::errors::AmmError;
+use crate::helpers::ensure_supported_mint;
 use crate::state::{Config, CONFIG_SEED, LP_SEED, MAX_FEE_BPS};
 
 /// Accounts required to initialize a new constant-product pool.
@@ -93,6 +94,8 @@ pub(crate) fn handler(
         ctx.accounts.vault_y.key(),
         AmmError::IdenticalVaults
     );
+    ensure_supported_mint(&ctx.accounts.mint_x)?;
+    ensure_supported_mint(&ctx.accounts.mint_y)?;
 
     // Create vault ATAs only after mint/fee validation so error codes stay precise.
     associated_token::create(CpiContext::new(

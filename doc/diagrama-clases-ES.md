@@ -11,9 +11,11 @@ classDiagram
     class AmmProgram {
         <<program>>
         +initialize(seed, fee, authority) Result
-        +deposit(amount_x, amount_y, min_lp) Result
+        +deposit(max_x, max_y, min_lp) Result
         +withdraw(lp_amount, min_x, min_y) Result
         +swap(is_x, amount_in, min_out) Result
+        +set_locked(locked) Result
+        +set_authority(new_authority) Result
     }
 
     class Config {
@@ -44,6 +46,8 @@ classDiagram
         Unauthorized
         PoolLocked
         InvalidAmount
+        UnsupportedMintExtension
+        MintHasFreezeAuthority
     }
 
     class Initialize {
@@ -97,6 +101,12 @@ classDiagram
         +Interface token_program
     }
 
+    class UpdateConfig {
+        <<Accounts>>
+        +Signer authority
+        +Account Config config
+    }
+
     class VaultX {
         <<TokenAccount PDA>>
         authority = Config PDA
@@ -126,6 +136,7 @@ classDiagram
     AmmProgram --> Deposit : usa
     AmmProgram --> Withdraw : usa
     AmmProgram --> Swap : usa
+    AmmProgram --> UpdateConfig : usa
     AmmProgram --> AmmError : lanza
 
     Initialize --> Config : init
@@ -147,6 +158,8 @@ classDiagram
     Swap --> VaultX : in/out
     Swap --> VaultY : in/out
 
+    UpdateConfig --> Config : escribe locked/authority
+
     Initialize ..> TokenInterface : CPI
     Deposit ..> TokenInterface : CPI
     Withdraw ..> TokenInterface : CPI
@@ -165,3 +178,6 @@ classDiagram
 | LP | Primer depósito bloquea liquidez mínima |
 | Tokens | Solo `token_interface` + `transfer_checked` |
 | Math | Constant product; fee sobre input; `u128` + `checked_*` |
+| Depósito | `deposit_quote`: LP por el lado escaso, cobra `ceil` de la proporción; excedente no se toma |
+| Mints | `ensure_supported_mint`: sin `freeze_authority`; Token-2022 solo con extensiones de metadata/grupo |
+| Admin | `UpdateConfig`: `config.authority == Some(signer)`; pausa deposit/swap, withdraw siempre abierto |

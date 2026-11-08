@@ -9,7 +9,7 @@ use anchor_spl::{
 };
 
 use crate::errors::AmmError;
-use crate::helpers::{lp_tokens_for_deposit, MINIMUM_LIQUIDITY};
+use crate::helpers::{deposit_quote, MINIMUM_LIQUIDITY};
 use crate::state::{Config, CONFIG_SEED, LP_SEED};
 
 /// Accounts for depositing token X/Y and minting LP.
@@ -114,19 +114,15 @@ pub struct Deposit<'info> {
 
 /// @notice Deposits token X and Y into the pool and mints LP shares.
 /// @dev First deposit locks `MINIMUM_LIQUIDITY` LP in `lock_lp` (Config-owned ATA).
+///      Later deposits only pull the pool ratio; the excess of an unbalanced offer is not taken.
 /// @param ctx Deposit accounts (user, mints, config, vaults, ATAs, token programs).
-/// @param amount_x Exact amount of token X to transfer from the user.
-/// @param amount_y Exact amount of token Y to transfer from the user.
+/// @param max_x Maximum token X to transfer from the user.
+/// @param max_y Maximum token Y to transfer from the user.
 /// @param min_lp Slippage guard: minimum LP tokens the user must receive.
 /// @return Result<()> Ok when transfers and mints succeed.
-pub(crate) fn handler(
-    ctx: Context<Deposit>,
-    amount_x: u64,
-    amount_y: u64,
-    min_lp: u64,
-) -> Result<()> {
+pub(crate) fn handler(ctx: Context<Deposit>, max_x: u64, max_y: u64, min_lp: u64) -> Result<()> {
     require!(!ctx.accounts.config.locked, AmmError::PoolLocked);
-    require!(amount_x > 0 && amount_y > 0, AmmError::InvalidAmount);
+    require!(max_x > 0 && max_y > 0, AmmError::InvalidAmount);
     require_keys_neq!(
         ctx.accounts.user_x.key(),
         ctx.accounts.user_y.key(),
@@ -137,9 +133,8 @@ pub(crate) fn handler(
     let reserve_y = ctx.accounts.vault_y.amount;
     let total_lp = ctx.accounts.mint_lp.supply;
 
-    let (lp_to_user, lock_minimum) =
-        lp_tokens_for_deposit(amount_x, amount_y, reserve_x, reserve_y, total_lp)?;
-    require!(lp_to_user >= min_lp, AmmError::SlippageExceeded);
+    let quote = deposit_quote(max_x, max_y, reserve_x, reserve_y, total_lp)?;
+    require!(quote.lp_to_user >= min_lp, AmmError::SlippageExceeded);
 
     // Transfer underlying tokens into the pool vaults.
     transfer_checked(
@@ -152,7 +147,7 @@ pub(crate) fn handler(
                 authority: ctx.accounts.user.to_account_info(),
             },
         ),
-        amount_x,
+        quote.amount_x,
         ctx.accounts.mint_x.decimals,
     )?;
 
@@ -166,7 +161,7 @@ pub(crate) fn handler(
                 authority: ctx.accounts.user.to_account_info(),
             },
         ),
-        amount_y,
+        quote.amount_y,
         ctx.accounts.mint_y.decimals,
     )?;
 
@@ -174,7 +169,7 @@ pub(crate) fn handler(
     let bump = [ctx.accounts.config.config_bump];
     let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, seed_bytes.as_ref(), bump.as_ref()]];
 
-    if lock_minimum {
+    if quote.lock_minimum {
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -199,7 +194,7 @@ pub(crate) fn handler(
             },
             signer_seeds,
         ),
-        lp_to_user,
+        quote.lp_to_user,
     )?;
 
     Ok(())

@@ -35,6 +35,7 @@ Autorizo Fase N — <nombre>
 | 6 | Suite de seguridad Sealevel | COMPLETADA | SÍ | SÍ |
 | 7 | Cliente / frontend Next.js | COMPLETADA | SÍ | SÍ |
 | 8 | Hardening, docs finales y checklist de auditoría | COMPLETADA | SÍ | SÍ |
+| 9 | Hardening de seguridad post-auditoría | COMPLETADA (pendiente de visto bueno) | SÍ | SÍ |
 
 ---
 
@@ -75,7 +76,7 @@ Autorizo Fase N — <nombre>
 - [x] Campos ordenados por tamaño descendente: `authority` → `mint_*` → `seed` → `fee` → `locked` / bumps
 - [x] Espacio exacto: `Config::ACCOUNT_SPACE = 8 + Config::INIT_SPACE` (= 150)
 - [x] Bumps canónicos: `config_bump`, `lp_bump`
-- [x] `AmmError` (`#[error_code]`): IdenticalVaults, IdenticalMints, InvalidFee, SlippageExceeded, MathOverflow, InsufficientLiquidity, Unauthorized, PoolLocked, InvalidAmount
+- [x] `AmmError` (`#[error_code]`): IdenticalVaults, IdenticalMints, InvalidFee, SlippageExceeded, MathOverflow, InsufficientLiquidity, Unauthorized, PoolLocked, InvalidAmount, UnsupportedMintExtension, MintHasFreezeAuthority
 
 **Criterios de aceptación:**
 - [x] Test Rust: `INIT_SPACE == 142` y `ACCOUNT_SPACE == 8 + INIT_SPACE`
@@ -272,10 +273,38 @@ Autorizo Fase N — <nombre>
 
 ---
 
+## Fase 9 — Hardening de seguridad post-auditoría
+
+**Objetivo:** cerrar los vectores detectados al revisar el funcionamiento interno de los módulos.
+
+**Estado:** COMPLETADA, pendiente de visto bueno (autorizada 2026-11-08)
+
+**Entregables (TDD: test en rojo que reproduce el ataque → fix → verde):**
+- [x] Donation griefing: el primer depósito ignora saldos previos en los vaults (antes el pool quedaba bloqueado para siempre)
+- [x] Token-2022: allowlist de extensiones de mint (solo metadata/grupo) → `UnsupportedMintExtension`
+- [x] Freeze authority: mints con `freeze_authority` rechazados → `MintHasFreezeAuthority`
+- [x] Depósitos desbalanceados: `deposit(max_x, max_y, min_lp)` + `deposit_quote`; solo se cobra la proporción del pool (redondeo hacia arriba a favor del pool)
+- [x] Admin: `set_locked` y `set_authority` (`UpdateConfig`, solo `config.authority`); pausa deposit/swap, `withdraw` nunca se bloquea; renuncia con `None`
+- [x] Suite de tests: `errorBlob` relanza `AssertionError` para que un `expect.fail` no sea tragado por el `catch` (había falsos positivos)
+- [x] IDL copiado a la app; etiquetas "Máx. X / Máx. Y" y ayuda ES/EN actualizada
+- [x] Documentación ES/EN (README, auditoría §1/§3/§4/§6, diagramas, flujogramas)
+
+**Criterios de aceptación:**
+- [x] `anchor test` verde (37 passing)
+- [x] `cargo test -p amm` (16 tests) · `cargo clippy -D warnings` · `cargo fmt --check`
+- [x] App: `tsc --noEmit` + Vitest (14 tests)
+
+**Trade-off conocido:** stablecoins con freeze authority (p. ej. USDC) no se pueden listar.
+
+**Dependencias:** Fase 8  
+**Autorización requerida:** sí (otorgada en el chat)
+
+---
+
 ## Orden de trabajo sugerido (resumen)
 
 ```text
-Fase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 opcional] → 8
+Fase 0 → 1 → 2 → 3 → 4 → 5 → 6 → [7 opcional] → 8 → 9
          ↑
    autorizar una a una
 ```
