@@ -4,6 +4,7 @@
 //! - [`state`] — on-chain account layouts (`Config`, etc.)
 //! - [`instructions`] — RPC handlers and `#[derive(Accounts)]` contexts
 //! - [`errors`] — `#[error_code]` definitions (`AmmError`)
+//! - [`events`] — `#[event]` structs emitted via `emit_cpi!`
 //! - [`helpers`] — checked math and liquidity constants
 
 // Anchor macros emit host-side `cfg` / deprecated noise (e.g. `anchor-debug`, `realloc`).
@@ -13,11 +14,13 @@
 use anchor_lang::prelude::*;
 
 pub mod errors;
+pub mod events;
 pub mod helpers;
 pub mod instructions;
 pub mod state;
 
 pub use errors::*;
+pub use events::*;
 pub use helpers::*;
 pub use state::*;
 

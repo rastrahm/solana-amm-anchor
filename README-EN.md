@@ -35,7 +35,7 @@ cargo build-sbf -p amm
 ## Tests
 
 ```bash
-# On-chain suite (local validator + 39 amm + security tests)
+# On-chain suite (local validator + 43 amm + security + event tests)
 anchor test
 
 # Math / host unit tests only (22 tests: 16 unit + 6 proptest properties)
@@ -90,6 +90,23 @@ cp target/types/amm.ts app/src/lib/idl/  # if applicable
 | `set_locked` | `locked` | `config.authority` only; pauses deposit/swap, withdraw always open |
 | `set_authority` | `new_authority?` | `config.authority` only; `None` renounces forever |
 
+## Events
+
+Every instruction emits an event with `emit_cpi!` (`event-cpi` feature): the program calls itself with the event as instruction data, signed by the `__event_authority` PDA. Unlike `emit!` (`Program data:` log lines), these events are not truncated by the log limit and nobody else can emit them on the program's behalf.
+
+| Instruction | Event | Main fields |
+|-------------|-------|-------------|
+| `initialize` | `PoolInitialized` | `authority`, `config`, mints, `seed`, `fee` |
+| `deposit` | `LiquidityDeposited` | `user`, pulled `amount_x/y`, `lp_minted`, `lp_locked`, post-operation reserves |
+| `withdraw` | `LiquidityWithdrawn` | `user`, `lp_burned`, `amount_x/y`, post-operation reserves |
+| `swap` | `SwapExecuted` | `user`, `is_x`, `amount_in`, `amount_out`, post-operation reserves |
+| `set_locked` | `LockedUpdated` | `authority`, `locked` |
+| `set_authority` | `AuthorityUpdated` | `previous_authority`, `new_authority` |
+
+Each instruction gets two extra accounts (`event_authority` and `program`); with `accountsPartial` the Anchor client resolves them from the IDL. To read events, take the transaction's inner instructions addressed to the program, drop the 8-byte `EVENT_IX_TAG_LE` prefix and decode the rest with `program.coder.events.decode` (see `eventsOf` in `tests/security.ts`). Cost: ≈ 5–12k extra compute units per instruction.
+
+Real example with raw logs, bytes and the decoded event for each instruction: [`doc/ejemplo-logs-eventos.md`](doc/ejemplo-logs-eventos.md) (regenerate it with `scripts/event-logs-example.ts`).
+
 ## Next.js client
 
 ```bash
@@ -118,6 +135,7 @@ See `app/README.md`.
 - Mints without a `freeze_authority` (`MintHasFreezeAuthority`), so nobody can freeze a vault
 - Unbalanced deposits: only the pool ratio is pulled; the excess stays in the wallet
 - Optional admin: pauses deposit/swap without being able to block withdrawals; transferable or renounceable
+- Events via PDA-signed self-CPI: they cannot be forged or truncated
 - Token-2022: only mints without extensions or with metadata/group extensions. TransferFee, PermanentDelegate, TransferHook and other extensions that alter balances or custody are rejected (`UnsupportedMintExtension`)
 
 Details and traceability to tests: [`doc/auditoria-EN.md`](doc/auditoria-EN.md).

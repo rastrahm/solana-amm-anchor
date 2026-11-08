@@ -3,12 +3,14 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::AmmError;
+use crate::events::{AuthorityUpdated, LockedUpdated};
 use crate::state::{Config, CONFIG_SEED};
 
 /// Accounts for admin updates on an existing pool.
 ///
 /// Only the current `config.authority` may sign; pools initialized (or renounced) with
 /// `authority = None` are immutable and always fail with `Unauthorized`.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct UpdateConfig<'info> {
     /// Current pool admin.
@@ -31,6 +33,13 @@ pub struct UpdateConfig<'info> {
 /// @return Result<()> Ok when stored.
 pub(crate) fn set_locked_handler(ctx: Context<UpdateConfig>, locked: bool) -> Result<()> {
     ctx.accounts.config.locked = locked;
+
+    emit_cpi!(LockedUpdated {
+        config: ctx.accounts.config.key(),
+        authority: ctx.accounts.authority.key(),
+        locked,
+    });
+
     Ok(())
 }
 
@@ -42,6 +51,14 @@ pub(crate) fn set_authority_handler(
     ctx: Context<UpdateConfig>,
     new_authority: Option<Pubkey>,
 ) -> Result<()> {
+    let previous_authority = ctx.accounts.config.authority;
     ctx.accounts.config.authority = new_authority;
+
+    emit_cpi!(AuthorityUpdated {
+        previous_authority,
+        new_authority,
+        config: ctx.accounts.config.key(),
+    });
+
     Ok(())
 }

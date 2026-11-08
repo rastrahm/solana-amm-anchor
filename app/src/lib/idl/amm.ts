@@ -494,6 +494,38 @@ export type Amm = {
             "System program."
           ],
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -634,6 +666,38 @@ export type Amm = {
             "System program for account creation."
           ],
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -705,6 +769,38 @@ export type Amm = {
               }
             ]
           }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -768,6 +864,38 @@ export type Amm = {
               }
             ]
           }
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -1095,6 +1223,38 @@ export type Amm = {
           "docs": [
             "SPL Token or Token-2022 program."
           ]
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -1515,6 +1675,38 @@ export type Amm = {
           "docs": [
             "SPL Token or Token-2022 program."
           ]
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -1545,6 +1737,86 @@ export type Amm = {
         250,
         204,
         130
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "authorityUpdated",
+      "discriminator": [
+        133,
+        207,
+        24,
+        122,
+        14,
+        234,
+        91,
+        34
+      ]
+    },
+    {
+      "name": "liquidityDeposited",
+      "discriminator": [
+        218,
+        155,
+        74,
+        193,
+        59,
+        66,
+        94,
+        122
+      ]
+    },
+    {
+      "name": "liquidityWithdrawn",
+      "discriminator": [
+        240,
+        120,
+        73,
+        139,
+        154,
+        31,
+        218,
+        68
+      ]
+    },
+    {
+      "name": "lockedUpdated",
+      "discriminator": [
+        248,
+        22,
+        176,
+        209,
+        96,
+        38,
+        144,
+        73
+      ]
+    },
+    {
+      "name": "poolInitialized",
+      "discriminator": [
+        100,
+        118,
+        173,
+        87,
+        12,
+        198,
+        254,
+        229
+      ]
+    },
+    {
+      "name": "swapExecuted",
+      "discriminator": [
+        150,
+        166,
+        26,
+        225,
+        28,
+        89,
+        38,
+        79
       ]
     }
   ],
@@ -1606,6 +1878,42 @@ export type Amm = {
     }
   ],
   "types": [
+    {
+      "name": "authorityUpdated",
+      "docs": [
+        "@notice The admin was transferred or renounced by `set_authority`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previousAuthority",
+            "docs": [
+              "Admin before the change."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "newAuthority",
+            "docs": [
+              "Admin after the change; `None` means renounced forever."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "config",
+            "docs": [
+              "Config PDA identifying the pool."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
     {
       "name": "config",
       "docs": [
@@ -1682,6 +1990,287 @@ export type Amm = {
               "Canonical bump for the LP mint PDA."
             ],
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityDeposited",
+      "docs": [
+        "@notice Liquidity was added by `deposit`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "Config PDA identifying the pool."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "docs": [
+              "Liquidity provider."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amountX",
+            "docs": [
+              "Token X actually pulled from the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amountY",
+            "docs": [
+              "Token Y actually pulled from the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lpMinted",
+            "docs": [
+              "LP minted to the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lpLocked",
+            "docs": [
+              "LP locked forever in `lock_lp` (`MINIMUM_LIQUIDITY` on the first deposit, else 0)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserveX",
+            "docs": [
+              "Vault X balance after the deposit."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserveY",
+            "docs": [
+              "Vault Y balance after the deposit."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityWithdrawn",
+      "docs": [
+        "@notice Liquidity was removed by `withdraw`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "Config PDA identifying the pool."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "docs": [
+              "Liquidity provider."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lpBurned",
+            "docs": [
+              "LP burned from the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amountX",
+            "docs": [
+              "Token X sent to the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amountY",
+            "docs": [
+              "Token Y sent to the user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserveX",
+            "docs": [
+              "Vault X balance after the withdrawal."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserveY",
+            "docs": [
+              "Vault Y balance after the withdrawal."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "lockedUpdated",
+      "docs": [
+        "@notice The pause flag was changed by `set_locked`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "Config PDA identifying the pool."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Admin that signed the change."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "locked",
+            "docs": [
+              "New pause flag."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolInitialized",
+      "docs": [
+        "@notice A new pool was created by `initialize`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Admin of the pool; `None` means immutable."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "config",
+            "docs": [
+              "Config PDA identifying the pool."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mintX",
+            "docs": [
+              "Mint of token X."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mintY",
+            "docs": [
+              "Mint of token Y."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mintLp",
+            "docs": [
+              "LP share mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "seed",
+            "docs": [
+              "Seed used to derive the Config PDA."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Swap fee in basis points."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "swapExecuted",
+      "docs": [
+        "@notice A trade was executed by `swap`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "docs": [
+              "Config PDA identifying the pool."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "docs": [
+              "Trader."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amountIn",
+            "docs": [
+              "Exact input sent by the trader (fee included)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amountOut",
+            "docs": [
+              "Output received by the trader."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserveX",
+            "docs": [
+              "Vault X balance after the swap."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserveY",
+            "docs": [
+              "Vault Y balance after the swap."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "isX",
+            "docs": [
+              "`true` for X→Y, `false` for Y→X."
+            ],
+            "type": "bool"
           }
         ]
       }

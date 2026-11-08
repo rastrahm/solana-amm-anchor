@@ -6,12 +6,14 @@ use anchor_spl::token_interface::{
 };
 
 use crate::errors::AmmError;
+use crate::events::SwapExecuted;
 use crate::helpers::amount_out_for_swap;
 use crate::state::{Config, CONFIG_SEED};
 
 /// Accounts for swapping between token X and token Y.
 ///
 /// Large token accounts are `Box`ed to stay under the BPF 4KB stack limit.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct Swap<'info> {
     /// Trader funding the input transfer and receiving the output.
@@ -175,6 +177,27 @@ pub(crate) fn handler(
             mint_out_decimals,
         )?;
     }
+
+    let reserve_in_after = reserve_in
+        .checked_add(amount_in)
+        .ok_or(AmmError::MathOverflow)?;
+    let reserve_out_after = reserve_out
+        .checked_sub(amount_out)
+        .ok_or(AmmError::MathOverflow)?;
+    let (reserve_x, reserve_y) = if is_x {
+        (reserve_in_after, reserve_out_after)
+    } else {
+        (reserve_out_after, reserve_in_after)
+    };
+    emit_cpi!(SwapExecuted {
+        config: ctx.accounts.config.key(),
+        user: ctx.accounts.user.key(),
+        amount_in,
+        amount_out,
+        reserve_x,
+        reserve_y,
+        is_x,
+    });
 
     Ok(())
 }

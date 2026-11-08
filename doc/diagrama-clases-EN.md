@@ -107,6 +107,25 @@ classDiagram
         +Account Config config
     }
 
+    class EventCpi {
+        <<event_cpi>>
+        +AccountInfo event_authority
+        +AccountInfo program
+        --
+        PDA seeds = __event_authority
+        added to all 5 contexts
+    }
+
+    class Events {
+        <<event>>
+        PoolInitialized
+        LiquidityDeposited
+        LiquidityWithdrawn
+        SwapExecuted
+        LockedUpdated
+        AuthorityUpdated
+    }
+
     class VaultX {
         <<TokenAccount PDA>>
         authority = Config PDA
@@ -160,6 +179,9 @@ classDiagram
 
     UpdateConfig --> Config : writes locked/authority
 
+    AmmProgram ..> Events : emit_cpi!
+    Events ..> EventCpi : PDA signs
+
     Initialize ..> TokenInterface : CPI
     Deposit ..> TokenInterface : CPI
     Withdraw ..> TokenInterface : CPI
@@ -181,3 +203,4 @@ classDiagram
 | Deposit | `deposit_quote`: LP from the scarce side, pulls `ceil` of the ratio; excess is not taken |
 | Mints | `ensure_supported_mint`: no `freeze_authority`; Token-2022 only with metadata/group extensions |
 | Admin | `UpdateConfig`: `config.authority == Some(signer)`; pauses deposit/swap, withdraw always open |
+| Events | `#[event_cpi]` + `emit_cpi!`: one event per instruction, signed by the `__event_authority` PDA (cannot be forged) |

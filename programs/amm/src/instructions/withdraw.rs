@@ -6,12 +6,14 @@ use anchor_spl::token_interface::{
 };
 
 use crate::errors::AmmError;
+use crate::events::LiquidityWithdrawn;
 use crate::helpers::amounts_for_withdraw;
 use crate::state::{Config, CONFIG_SEED, LP_SEED};
 
 /// Accounts for withdrawing liquidity by burning LP tokens.
 ///
 /// Large token accounts are `Box`ed to stay under the BPF 4KB stack limit.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
     /// Liquidity provider burning LP and receiving X/Y.
@@ -172,6 +174,20 @@ pub(crate) fn handler(
         amount_y,
         ctx.accounts.mint_y.decimals,
     )?;
+
+    emit_cpi!(LiquidityWithdrawn {
+        config: ctx.accounts.config.key(),
+        user: ctx.accounts.user.key(),
+        lp_burned: lp_amount,
+        amount_x,
+        amount_y,
+        reserve_x: reserve_x
+            .checked_sub(amount_x)
+            .ok_or(AmmError::MathOverflow)?,
+        reserve_y: reserve_y
+            .checked_sub(amount_y)
+            .ok_or(AmmError::MathOverflow)?,
+    });
 
     Ok(())
 }
